@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ``postgresql+asyncpg://user:password@localhost:5432/appchoferes``
     """
 
-    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
+    DATABASE_URL: str = "mysql+aiomysql://root:@127.0.0.1:3306/appchoferes"
     JWT_SECRET_KEY: str = "change-me-secret"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day

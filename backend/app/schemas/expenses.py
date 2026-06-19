@@ -28,7 +28,7 @@ class ExpenseResponse(ExpenseBase):
     user_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ExpenseEditRequestCreate(BaseModel):
     expense_id: int
@@ -43,4 +43,4 @@ class ExpenseEditRequestResponse(BaseModel):
     created_at: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
