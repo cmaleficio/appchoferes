@@ -1,0 +1,16 @@
+INFO:     127.0.0.1:63530 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56274 - "GET /admin HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:56274 - "GET /admin/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /admin HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:62239 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/routes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/budgets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/expenses/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/expenses/requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /api/routes/1/tracks?user_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "GET /admin/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62239 - "POST /api/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62242 - "GET /health HTTP/1.1" 200 OK

@@ -1,0 +1,16 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\Cmarffisis\\CODE\\appchoferes']
+C:\Users\Cmarffisis\CODE\appchoferes\venv\Lib\site-packages\pydantic\_internal\_config.py:386: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [27916] using WatchFiles
+C:\Users\Cmarffisis\CODE\appchoferes\venv\Lib\site-packages\pydantic\_internal\_config.py:386: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [28748]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+C:\Users\Cmarffisis\CODE\appchoferes\venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 16 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+C:\Users\Cmarffisis\CODE\appchoferes\venv\Lib\site-packages\jwt\api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 16 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
