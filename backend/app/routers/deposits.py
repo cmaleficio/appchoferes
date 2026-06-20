@@ -1,36 +1,38 @@
-"""Budget management endpoints for admin."""
+"""Deposit management endpoints for admin."""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from typing import Optional
 
 from ..core.dependencies import get_current_user
 from ..core.database import get_db
 from ..core.logger import create_log_entry
-from ..models import Budget, User
-from ..schemas.budget import BudgetCreate, BudgetResponse
+from ..models import Deposit, User
+from ..schemas.deposits import DepositCreate, DepositResponse
 
 router = APIRouter()
 
-@router.get("/budgets", response_model=list[BudgetResponse])
-async def list_budgets(
+
+@router.get("/deposits", response_model=list[DepositResponse])
+async def list_deposits(
     user_id: Optional[int] = Query(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
-    stmt = select(Budget)
+    stmt = select(Deposit).order_by(desc(Deposit.created_at))
     if user_id:
-        stmt = stmt.where(Budget.user_id == user_id)
+        stmt = stmt.where(Deposit.user_id == user_id)
     result = await db.execute(stmt)
-    budgets = result.scalars().all()
-    return [BudgetResponse.from_orm(b) for b in budgets]
+    deposits = result.scalars().all()
+    return [DepositResponse.from_orm(d) for d in deposits]
 
-@router.post("/budgets", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
-async def create_budget(
-    payload: BudgetCreate,
+
+@router.post("/deposits", response_model=DepositResponse, status_code=status.HTTP_201_CREATED)
+async def create_deposit(
+    payload: DepositCreate,
     request: Request,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -41,21 +43,20 @@ async def create_budget(
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    budget = Budget(
+
+    deposit = Deposit(
         user_id=payload.user_id,
         amount=payload.amount,
         amount_bs=payload.amount_bs,
         exchange_rate=payload.exchange_rate,
-        period_start=payload.period_start,
-        period_end=payload.period_end,
+        description=payload.description,
     )
-    db.add(budget)
+    db.add(deposit)
     await db.commit()
-    await db.refresh(budget)
+    await db.refresh(deposit)
     ip = request.client.host if request.client else None
-    details = f"Budget ${payload.amount:.2f} USD"
+    details = f"Deposit ${payload.amount:.2f} USD to user {user.email}"
     if payload.amount_bs and payload.exchange_rate:
         details += f" | Bs.{payload.amount_bs:.2f} @ tasa {payload.exchange_rate:.2f}"
-    details += f" for user {user.email}"
-    await create_log_entry(db, current_user.id, "create", "budget", budget.id, details, ip)
-    return BudgetResponse.from_orm(budget)
+    await create_log_entry(db, current_user.id, "create", "deposit", deposit.id, details, ip)
+    return DepositResponse.from_orm(deposit)

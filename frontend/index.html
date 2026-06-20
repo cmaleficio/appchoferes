@@ -6,6 +6,8 @@
   <title>AppChoferes — Panel Administrativo</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
     .fade-enter-from, .fade-leave-to { opacity: 0; }
@@ -66,6 +68,9 @@
               Solicitudes de Edición
               <span v-if="pendingRequestsCount" class="ml-1.5 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{{ pendingRequestsCount }}</span>
             </button>
+            <button @click="activeTab='usuarios'" :class="activeTab==='usuarios' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Usuarios</button>
+            <button @click="activeTab='bitacora'" :class="activeTab==='bitacora' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Bitácora</button>
+            <button @click="activeTab='tasas'" :class="activeTab==='tasas' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Tasas</button>
           </nav>
         </div>
       </div>
@@ -84,7 +89,7 @@
           </div>
 
           <!-- Summary cards -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
             <div class="bg-white rounded-xl shadow p-4 border-l-4 border-indigo-500">
               <div class="text-xs text-gray-500 uppercase tracking-wide">Choferes activos</div>
               <div class="text-2xl font-bold text-gray-800">{{ drivers.length }}</div>
@@ -97,6 +102,10 @@
               <div class="text-xs text-gray-500 uppercase tracking-wide">Gastos totales</div>
               <div class="text-2xl font-bold text-gray-800">${{ totalExpensesAll }}</div>
             </div>
+            <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-500">
+              <div class="text-xs text-gray-500 uppercase tracking-wide">Depósitos totales</div>
+              <div class="text-2xl font-bold text-gray-800">${{ totalDepositsAll }}</div>
+            </div>
           </div>
 
           <!-- Drivers table -->
@@ -107,6 +116,7 @@
                   <tr>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Presupuesto</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depósitos</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gastos</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo</th>
                     <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -116,15 +126,17 @@
                   <tr v-for="d in drivers" :key="d.id" class="hover:bg-gray-50 transition-colors">
                     <td class="px-4 py-3 text-sm font-medium text-gray-800">{{ d.email }}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${{ d.totalBudget.toFixed(2) }}</td>
+                    <td class="px-4 py-3 text-sm text-emerald-600 font-medium">${{ d.totalDeposits.toFixed(2) }}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${{ d.totalExpenses.toFixed(2) }}</td>
                     <td class="px-4 py-3 text-sm font-medium" :class="d.balance >= 0 ? 'text-green-600' : 'text-red-600'">${{ d.balance.toFixed(2) }}</td>
                     <td class="px-4 py-3 text-right text-sm space-x-2">
+                      <button @click="openDepositModal(d)" class="inline-flex items-center px-2.5 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md text-xs font-medium transition-colors">Agregar Depósito</button>
                       <button @click="openBudgetModal(d)" class="inline-flex items-center px-2.5 py-1.5 border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md text-xs font-medium transition-colors">Cargar Presupuesto</button>
                       <button @click="syncDriverRoutes(d)" class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 rounded-md text-xs font-medium transition-colors">Sincronizar Rutas</button>
                     </td>
                   </tr>
                   <tr v-if="drivers.length === 0">
-                    <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">No hay choferes registrados</td>
+                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">No hay choferes registrados</td>
                   </tr>
                 </tbody>
               </table>
@@ -133,13 +145,34 @@
 
           <!-- Budget modal -->
           <div v-if="showBudgetModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showBudgetModal=false">
-            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
               <h3 class="text-lg font-bold text-gray-800 mb-4">Cargar Presupuesto</h3>
               <p class="text-sm text-gray-500 mb-4">Chofer: <strong>{{ budgetDriver?.email }}</strong></p>
               <div class="space-y-4">
+                <!-- USD amount -->
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Monto ($)</label>
-                  <input v-model.number="budgetForm.amount" type="number" step="0.01" min="0" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Monto en USD ($)</label>
+                  <input v-model.number="budgetForm.amount" type="number" step="0.01" min="0" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0.00" />
+                </div>
+                <!-- Bolivares + Exchange Rate -->
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Monto en Bs.</label>
+                    <input v-model.number="budgetForm.amount_bs" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tasa BCV (Bs./USD)</label>
+                    <div class="flex gap-2">
+                      <input v-model.number="budgetForm.exchange_rate" type="number" step="0.01" min="0" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                      <button @click="fetchBCVRate" type="button" title="Obtener tasa BCV" class="px-2 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors" :disabled="fetchingRate">
+                        <svg class="w-4 h-4" :class="fetchingRate ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="budgetForm.amount_bs && budgetForm.exchange_rate" class="text-xs text-gray-500 bg-indigo-50 rounded-lg px-3 py-2">
+                  USD calculado: <strong>${{ (budgetForm.amount_bs / budgetForm.exchange_rate).toFixed(2) }}</strong>
+                  &nbsp;|&nbsp; Monto ingresado: <strong>${{ budgetForm.amount.toFixed(2) }}</strong>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
@@ -157,6 +190,39 @@
                 <button @click="submitBudget" :disabled="saving" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">{{ saving ? 'Guardando...' : 'Guardar Presupuesto' }}</button>
               </div>
               <div v-if="budgetError" class="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ budgetError }}</div>
+            </div>
+          </div>
+
+          <!-- Deposit modal -->
+          <div v-if="showDepositModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showDepositModal=false">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+              <h3 class="text-lg font-bold text-gray-800 mb-4">Agregar Depósito</h3>
+              <p class="text-sm text-gray-500 mb-4">Chofer: <strong>{{ depositDriver?.email }}</strong></p>
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Monto en USD ($)</label>
+                  <input v-model.number="depositForm.amount" type="number" step="0.01" min="0" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0.00" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Monto en Bs.</label>
+                    <input v-model.number="depositForm.amount_bs" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tasa BCV</label>
+                    <input v-model.number="depositForm.exchange_rate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                  <input v-model="depositForm.description" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                </div>
+              </div>
+              <div class="flex justify-end gap-3 mt-6">
+                <button @click="showDepositModal=false" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
+                <button @click="submitDeposit" :disabled="savingDeposit" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50">{{ savingDeposit ? 'Guardando...' : 'Guardar Depósito' }}</button>
+              </div>
+              <div v-if="depositError" class="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ depositError }}</div>
             </div>
           </div>
         </div>
@@ -216,6 +282,17 @@
               </div>
             </div>
 
+            <!-- Route map -->
+            <div class="bg-white rounded-xl shadow p-4 mb-6">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Mapa del Recorrido</h3>
+              <div id="routeMap" class="w-full rounded-lg" style="height:400px; z-index:0;"></div>
+              <div class="flex justify-between text-xs text-gray-500 mt-2">
+                <span><span class="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span> Inicio</span>
+                <span><span class="inline-block w-3 h-3 bg-red-500 rounded-full mr-1"></span> Fin</span>
+                <span><span class="inline-block w-3 h-3 bg-indigo-500 rounded-full mr-1"></span> Puntos intermedios</span>
+              </div>
+            </div>
+
             <!-- Track table -->
             <div class="bg-white rounded-xl shadow overflow-hidden">
               <div class="overflow-x-auto">
@@ -250,6 +327,192 @@
             </div>
           </div>
           <div v-else-if="auditUserId && auditRouteId" class="text-center py-10 text-gray-400 text-sm">No hay datos de tracking para esta combinación</div>
+        </div>
+
+        <!-- ===== TAB: USUARIOS ===== -->
+        <div v-if="!loading && activeTab==='usuarios'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Gestión de Usuarios</h2>
+            <button @click="fetchAllUsers" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">⟳ Actualizar</button>
+          </div>
+
+          <!-- Users table -->
+          <div class="bg-white rounded-xl shadow overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="u in allUsers" :key="u.id" class="hover:bg-gray-50 transition-colors text-sm" :class="!u.is_active ? 'opacity-60' : ''">
+                    <td class="px-4 py-3 text-gray-400 font-mono">{{ u.id }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">{{ u.name || '—' }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ u.email }}</td>
+                    <td class="px-4 py-3">
+                      <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
+                        :class="u.role==='admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'">
+                        {{ u.role }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3">
+                      <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
+                        :class="u.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                        {{ u.is_active ? 'Activo' : 'Inactivo' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3">
+                      <button v-if="u.is_active && u.id !== user?.id" @click="disableUser(u)" class="inline-flex items-center px-2 py-1 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded-md text-xs font-medium transition-colors">Desactivar</button>
+                    </td>
+                  </tr>
+                  <tr v-if="allUsers.length === 0">
+                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-400">No hay usuarios registrados</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Create user form -->
+          <div class="bg-white rounded-xl shadow p-4 sm:p-6">
+            <h3 class="text-base font-semibold text-gray-800 mb-4">Crear Nuevo Usuario</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
+                <input v-model="createUserForm.name" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                <input v-model="createUserForm.email" type="email" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="correo@ejemplo.com" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Contraseña</label>
+                <input v-model="createUserForm.password" type="password" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Rol</label>
+                <select v-model="createUserForm.role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <option value="driver">Chofer</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+            </div>
+            <div v-if="createUserError" class="mb-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ createUserError }}</div>
+            <div v-if="createUserSuccess" class="mb-3 text-sm text-green-600 bg-green-50 rounded-lg px-3 py-2">{{ createUserSuccess }}</div>
+            <button @click="createUser" :disabled="creatingUser" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">{{ creatingUser ? 'Creando...' : 'Crear Usuario' }}</button>
+          </div>
+        </div>
+
+        <!-- ===== TAB: TASAS ===== -->
+        <div v-if="!loading && activeTab==='tasas'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Tasas de Cambio</h2>
+            <button @click="fetchExchangeRates" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">⟳ Actualizar</button>
+          </div>
+
+          <!-- Latest rate + BCV button -->
+          <div class="bg-white rounded-xl shadow p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div class="text-xs text-gray-500 uppercase tracking-wide font-medium">Tasa del día</div>
+                <div v-if="latestRate" class="text-3xl font-bold text-indigo-700 mt-1">
+                  Bs. {{ latestRate.rate.toFixed(2) }}
+                  <span class="text-sm font-normal text-gray-400 ml-2">/ USD</span>
+                </div>
+                <div v-else class="text-lg text-gray-400 mt-1">No registrada</div>
+                <div v-if="latestRate" class="text-xs text-gray-400 mt-1">Fuente: {{ latestRate.source }} · {{ latestRate.date }}</div>
+              </div>
+              <button @click="fetchBCVRateForTab" :disabled="fetchingRate"
+                class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-colors disabled:opacity-50 shadow-sm">
+                <svg class="w-5 h-5" :class="fetchingRate ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                {{ fetchingRate ? 'Obteniendo...' : 'Obtener Tasa del BCV' }}
+              </button>
+            </div>
+            <div v-if="rateSuccess" class="mt-3 text-sm text-green-600 bg-green-50 rounded-lg px-4 py-2">{{ rateSuccess }}</div>
+            <div v-if="rateError" class="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">{{ rateError }}</div>
+          </div>
+
+          <!-- Historical table -->
+          <div class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tasa (Bs./USD)</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fuente</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registrado</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="r in exchangeRates" :key="r.id" class="hover:bg-gray-50 transition-colors text-sm">
+                    <td class="px-4 py-3 text-gray-800 font-medium">{{ formatDate(r.date) }}</td>
+                    <td class="px-4 py-3 font-mono font-bold text-gray-800">Bs. {{ r.rate.toFixed(2) }}</td>
+                    <td class="px-4 py-3">
+                      <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
+                        :class="r.source==='bcv' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'">
+                        {{ r.source }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-gray-500 text-xs">{{ r.created_at }}</td>
+                  </tr>
+                  <tr v-if="exchangeRates.length === 0">
+                    <td colspan="4" class="px-4 py-8 text-center text-sm text-gray-400">No hay tasas registradas</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: BITÁCORA ===== -->
+        <div v-if="!loading && activeTab==='bitacora'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Bitácora de Actividades</h2>
+            <button @click="fetchLogs" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">⟳ Actualizar</button>
+          </div>
+
+          <div v-if="logs.length === 0" class="text-center py-10 text-gray-400 text-sm bg-white rounded-xl shadow p-8">No hay registros en la bitácora</div>
+
+          <div v-else class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acción</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recurso</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Detalle</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="log in logs" :key="log.id" class="hover:bg-gray-50 transition-colors text-sm">
+                    <td class="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{{ log.created_at }}</td>
+                    <td class="px-4 py-3 text-gray-800 font-medium">{{ userName(log.user_id) }}</td>
+                    <td class="px-4 py-3">
+                      <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
+                        :class="actionBadge(log.action)">
+                        {{ log.action }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600">{{ log.resource }}<span v-if="log.resource_id"> #{{ log.resource_id }}</span></td>
+                    <td class="px-4 py-3 text-gray-500 max-w-xs truncate">{{ log.details || '—' }}</td>
+                    <td class="px-4 py-3 text-gray-400 font-mono text-xs">{{ log.ip_address || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- ===== TAB: SOLICITUDES ===== -->
@@ -352,11 +615,34 @@
         const users = ref([]);
         const expenses = ref([]);
         const budgets = ref([]);
+        const deposits = ref([]);
         const showBudgetModal = ref(false);
         const budgetDriver = ref(null);
-        const budgetForm = ref({ amount: 0, period_start: '', period_end: '' });
+        const budgetForm = ref({ amount: 0, amount_bs: null, exchange_rate: null, period_start: '', period_end: '' });
         const saving = ref(false);
         const budgetError = ref('');
+        const showDepositModal = ref(false);
+        const depositDriver = ref(null);
+        const depositForm = ref({ amount: 0, amount_bs: null, exchange_rate: null, description: '' });
+        const depositError = ref('');
+        const savingDeposit = ref(false);
+
+        // Users tab
+        const allUsers = ref([]);
+        const createUserForm = ref({ name: '', email: '', password: '', role: 'driver' });
+        const createUserError = ref('');
+        const createUserSuccess = ref('');
+        const creatingUser = ref(false);
+        const fetchingRate = ref(false);
+
+        // Exchange rates tab
+        const exchangeRates = ref([]);
+        const rateError = ref('');
+        const rateSuccess = ref('');
+        const latestRate = computed(() => exchangeRates.value.length > 0 ? exchangeRates.value[0] : null);
+
+        // Logs tab
+        const logs = ref([]);
 
         // Audit data
         const auditUserId = ref(null);
@@ -380,12 +666,15 @@
             const totalExpenses = uExpenses.reduce((s, e) => s + e.amount, 0);
             const uBudgets = budgets.value.filter(b => b.user_id === u.id);
             const totalBudget = uBudgets.reduce((s, b) => s + b.amount, 0);
-            return { ...u, totalExpenses, totalBudget, balance: totalBudget - totalExpenses };
+            const uDeposits = deposits.value.filter(d => d.user_id === u.id);
+            const totalDeposits = uDeposits.reduce((s, d) => s + d.amount, 0);
+            return { ...u, totalExpenses, totalBudget, totalDeposits, balance: totalBudget + totalDeposits - totalExpenses };
           })
         );
 
         const totalBudget = computed(() => drivers.value.reduce((s, d) => s + d.totalBudget, 0).toFixed(2));
         const totalExpensesAll = computed(() => drivers.value.reduce((s, d) => s + d.totalExpenses, 0).toFixed(2));
+        const totalDepositsAll = computed(() => drivers.value.reduce((s, d) => s + d.totalDeposits, 0).toFixed(2));
         const pendingRequestsCount = computed(() => requests.value.filter(r => r.status === 'pendiente').length);
 
         // Chart computed
@@ -457,6 +746,9 @@
             await refreshDashboard();
             await fetchRoutes();
             await fetchRequests();
+            await fetchAllUsers();
+            await fetchLogs();
+            await fetchExchangeRates();
           } catch (e) {
             if (e.message.includes('401') || e.message.includes('Unauthorized')) logout();
           } finally { loading.value = false; }
@@ -465,20 +757,22 @@
         // Dashboard
         async function refreshDashboard() {
           try {
-            const [u, e, b] = await Promise.all([
+            const [u, e, b, d] = await Promise.all([
               api('/api/users'),
               api('/api/expenses'),
               api('/api/budgets'),
+              api('/api/deposits'),
             ]);
             users.value = u;
             expenses.value = e;
             budgets.value = b;
+            deposits.value = d;
           } catch (err) { console.error(err); }
         }
 
         function openBudgetModal(driver) {
           budgetDriver.value = driver;
-          budgetForm.value = { amount: 0, period_start: '', period_end: '' };
+          budgetForm.value = { amount: 0, amount_bs: null, exchange_rate: null, period_start: '', period_end: '' };
           budgetError.value = '';
           showBudgetModal.value = true;
         }
@@ -487,19 +781,44 @@
           saving.value = true;
           budgetError.value = '';
           try {
-            await api('/api/budgets', {
-              method: 'POST',
-              body: JSON.stringify({
-                user_id: budgetDriver.value.id,
-                amount: budgetForm.value.amount,
-                period_start: budgetForm.value.period_start + 'T00:00:00',
-                period_end: budgetForm.value.period_end + 'T23:59:59',
-              })
-            });
+            const body = {
+              user_id: budgetDriver.value.id,
+              amount: budgetForm.value.amount,
+              period_start: budgetForm.value.period_start + 'T00:00:00',
+              period_end: budgetForm.value.period_end + 'T23:59:59',
+            };
+            if (budgetForm.value.amount_bs != null) body.amount_bs = budgetForm.value.amount_bs;
+            if (budgetForm.value.exchange_rate != null) body.exchange_rate = budgetForm.value.exchange_rate;
+            await api('/api/budgets', { method: 'POST', body: JSON.stringify(body) });
             showBudgetModal.value = false;
             await refreshDashboard();
           } catch (e) { budgetError.value = e.message; }
           finally { saving.value = false; }
+        }
+
+        function openDepositModal(driver) {
+          depositDriver.value = driver;
+          depositForm.value = { amount: 0, amount_bs: null, exchange_rate: null, description: '' };
+          depositError.value = '';
+          showDepositModal.value = true;
+        }
+
+        async function submitDeposit() {
+          savingDeposit.value = true;
+          depositError.value = '';
+          try {
+            const body = {
+              user_id: depositDriver.value.id,
+              amount: depositForm.value.amount,
+              description: depositForm.value.description || null,
+            };
+            if (depositForm.value.amount_bs != null) body.amount_bs = depositForm.value.amount_bs;
+            if (depositForm.value.exchange_rate != null) body.exchange_rate = depositForm.value.exchange_rate;
+            await api('/api/deposits', { method: 'POST', body: JSON.stringify(body) });
+            showDepositModal.value = false;
+            await refreshDashboard();
+          } catch (e) { depositError.value = e.message; }
+          finally { savingDeposit.value = false; }
         }
 
         async function syncDriverRoutes(driver) {
@@ -509,10 +828,153 @@
           } catch (e) { alert('Error: ' + e.message); }
         }
 
+        // Users management
+        async function fetchAllUsers() {
+          try { allUsers.value = await api('/api/users?include_inactive=true'); }
+          catch (e) { console.error(e); }
+        }
+
+        async function createUser() {
+          creatingUser.value = true;
+          createUserError.value = '';
+          createUserSuccess.value = '';
+          try {
+            await api('/api/users', {
+              method: 'POST',
+              body: JSON.stringify(createUserForm.value)
+            });
+            createUserSuccess.value = 'Usuario creado exitosamente';
+            createUserForm.value = { name: '', email: '', password: '', role: 'driver' };
+            await fetchAllUsers();
+          } catch (e) { createUserError.value = e.message; }
+          finally { creatingUser.value = false; }
+        }
+
+        async function disableUser(u) {
+          if (!confirm(`¿Desactivar usuario ${u.email}?`)) return;
+          try {
+            await api(`/api/users/${u.id}`, { method: 'DELETE' });
+            await fetchAllUsers();
+          } catch (e) { alert('Error: ' + e.message); }
+        }
+
+        // Exchange rates
+        async function fetchExchangeRates() {
+          try { exchangeRates.value = await api('/api/exchange-rates'); }
+          catch (e) { console.error(e); }
+        }
+
+        async function submitExchangeRate() {
+          savingRate.value = true;
+          rateError.value = '';
+          rateSuccess.value = '';
+          try {
+            await api('/api/exchange-rates', {
+              method: 'POST',
+              body: JSON.stringify({
+                date: rateForm.value.date + 'T00:00:00',
+                rate: rateForm.value.rate,
+                source: rateForm.value.source,
+              })
+            });
+            rateSuccess.value = 'Tasa registrada exitosamente';
+            rateForm.value = { rate: 0, date: '', source: 'manual' };
+            await fetchExchangeRates();
+          } catch (e) { rateError.value = e.message; }
+          finally { savingRate.value = false; }
+        }
+
+        async function fetchBCVRateForTab() {
+          fetchingRate.value = true;
+          rateError.value = '';
+          rateSuccess.value = '';
+          try {
+            const data = await api('/api/exchange-rates/bcv', { method: 'POST' });
+            rateSuccess.value = `Tasa BCV registrada: Bs. ${data.rate.toFixed(2)}`;
+            await fetchExchangeRates();
+          } catch (e) {
+            rateError.value = e.message;
+          } finally { fetchingRate.value = false; }
+        }
+
+        function formatDate(d) {
+          if (!d) return '—';
+          return d.slice(0, 10);
+        }
+
+        // Logs
+        async function fetchLogs() {
+          try { logs.value = await api('/api/logs'); }
+          catch (e) { console.error(e); }
+        }
+
+        function userName(userId) {
+          const u = allUsers.value.find(x => x.id === userId);
+          return u ? (u.name || u.email) : `#${userId}`;
+        }
+
+        function actionBadge(action) {
+          const map = { create: 'bg-green-100 text-green-800', edit: 'bg-yellow-100 text-yellow-800', approve: 'bg-blue-100 text-blue-800', reject: 'bg-red-100 text-red-800' };
+          return map[action] || 'bg-gray-100 text-gray-800';
+        }
+
+        // BCV rate
+        async function fetchBCVRate() {
+          fetchingRate.value = true;
+          try {
+            const data = await api('/api/exchange-rates/bcv', { method: 'POST' });
+            budgetForm.value.exchange_rate = data.rate;
+          } catch (e) {
+            console.error('BCV fetch failed:', e);
+            alert('No se pudo obtener la tasa BCV. Introdúcela manualmente.');
+          } finally { fetchingRate.value = false; }
+        }
+
         // Audit
         async function fetchRoutes() {
           try { routes.value = await api('/api/routes'); }
           catch (e) { console.error(e); }
+        }
+
+        let leafletMap = null;
+
+        function initRouteMap() {
+          nextTick(() => {
+            const pts = routeTracks.value;
+            if (pts.length < 2) return;
+            const el = document.getElementById('routeMap');
+            if (!el) return;
+
+            // Destroy previous map instance
+            if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+
+            const coords = pts.map(p => [p.latitude, p.longitude]);
+            leafletMap = L.map('routeMap', { zoomControl: true }).setView(coords[0], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors',
+              maxZoom: 19,
+            }).addTo(leafletMap);
+
+            // Route polyline
+            L.polyline(coords, { color: '#6366f1', weight: 3, opacity: 0.8 }).addTo(leafletMap);
+
+            // Start marker (green)
+            L.circleMarker(coords[0], { radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 })
+              .addTo(leafletMap).bindPopup('Inicio');
+
+            // End marker (red)
+            L.circleMarker(coords[coords.length-1], { radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 })
+              .addTo(leafletMap).bindPopup('Fin');
+
+            // Intermediate points (small indigo dots)
+            for (let i = 1; i < coords.length - 1; i++) {
+              L.circleMarker(coords[i], { radius: 4, color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.6 })
+                .addTo(leafletMap);
+            }
+
+            // Fit bounds to show entire route
+            leafletMap.fitBounds(coords, { padding: [40, 40] });
+          });
         }
 
         async function fetchRouteTracks() {
@@ -520,6 +982,7 @@
           try {
             const data = await api(`/api/routes/${auditRouteId.value}/tracks?user_id=${auditUserId.value}`);
             routeTracks.value = data;
+            initRouteMap();
           } catch (e) { console.error(e); routeTracks.value = []; }
         }
 
@@ -581,19 +1044,31 @@
           finally { saving.value = false; }
         }
 
+        // Re-init map when switching to auditoria tab
+        watch(activeTab, (tab) => {
+          if (tab === 'auditoria' && routeTracks.value.length > 0) initRouteMap();
+        });
+
         // Auto-load on mount if token exists
         if (token.value) init();
 
         return {
           token, user, loginEmail, loginPassword, loginError, activeTab, loading,
-          users, expenses, budgets, drivers, totalBudget, totalExpensesAll,
+          users, expenses, budgets, deposits, drivers, totalBudget, totalExpensesAll, totalDepositsAll,
           showBudgetModal, budgetDriver, budgetForm, saving, budgetError,
           openBudgetModal, submitBudget, refreshDashboard, syncDriverRoutes,
+          showDepositModal, depositDriver, depositForm, depositError, savingDeposit,
+          openDepositModal, submitDeposit,
           routes, auditUserId, auditRouteId, routeTracks, fetchRouteTracks, batteryColor,
           requests, editRequestId, editForm, editError,
           pendingRequestsCount, statusBadge,
           fetchRequests, startEdit, rejectRequest, saveEdit,
           login, logout, chartW, chartH, gridLines, chartData, chartPoints,
+          allUsers, createUserForm, createUserError, createUserSuccess, creatingUser, fetchingRate,
+          fetchAllUsers, createUser, disableUser, fetchBCVRate,
+          exchangeRates, rateError, rateSuccess, latestRate,
+          fetchExchangeRates, fetchBCVRateForTab, formatDate,
+          logs, fetchLogs, userName, actionBadge,
         };
       }
     }).mount('#app');

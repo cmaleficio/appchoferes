@@ -18,6 +18,8 @@ class Expense(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category = Column(Enum(ExpenseCategory), nullable=False)
     amount = Column(Float, nullable=False)
+    amount_bs = Column(Float, nullable=True)
+    exchange_rate = Column(Float, nullable=True)
     description = Column(String(500), nullable=True)
     is_multiple_tolls = Column(Boolean, nullable=True)
     toll_count = Column(Integer, nullable=True)
@@ -64,10 +66,14 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="driver")
+    name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     expenses = relationship("Expense", back_populates="user")
     route_tracks = relationship("RouteTrack", back_populates="user")
+    logs = relationship("Log", back_populates="user")
 
 class Route(Base):
     __tablename__ = "routes"
@@ -82,6 +88,8 @@ class Budget(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Float, nullable=False)
+    amount_bs = Column(Float, nullable=True)
+    exchange_rate = Column(Float, nullable=True)
     period_start = Column(DateTime(timezone=True), nullable=False)
     period_end = Column(DateTime(timezone=True), nullable=False)
     user = relationship("User")
@@ -91,6 +99,41 @@ class Tag(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
     expenses = relationship("Expense", secondary="expense_tags", back_populates="tags")
+
+class Log(Base):
+    __tablename__ = "logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(50), nullable=False)
+    resource = Column(String(50), nullable=False)
+    resource_id = Column(Integer, nullable=True)
+    details = Column(String(1000), nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="logs")
+
+from sqlalchemy import Date
+
+class ExchangeRate(Base):
+    __tablename__ = "exchange_rates"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    rate = Column(Float, nullable=False)
+    source = Column(String(50), default="manual")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Deposit(Base):
+    __tablename__ = "deposits"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    amount_bs = Column(Float, nullable=True)
+    exchange_rate = Column(Float, nullable=True)
+    description = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
 
 expense_tags = Table(
     "expense_tags",

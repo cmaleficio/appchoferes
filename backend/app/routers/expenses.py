@@ -1,12 +1,13 @@
 """Expense related endpoints, including edit request workflow."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, exists
 from typing import Optional
 
 from ..core.dependencies import get_current_user
 from ..core.database import get_db
+from ..core.logger import create_log_entry
 from ..models import Expense, ExpenseRequest, ExpenseRequestStatus, User
 from ..schemas.expenses import (
     ExpenseCreate,
@@ -73,6 +74,7 @@ async def list_expense_requests(
 @router.put("/requests/{request_id}/approve")
 async def approve_expense_request(
     request_id: int,
+    request: Request,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -87,12 +89,15 @@ async def approve_expense_request(
     req.status = ExpenseRequestStatus.APROBADO
     await db.commit()
     await db.refresh(req)
+    ip = request.client.host if request.client else None
+    await create_log_entry(db, current_user.id, "approve", "expense_request", req.id, f"Approved edit request for expense #{req.expense_id}", ip)
     return {"detail": "Request approved", "request_id": request_id, "expense_id": req.expense_id}
 
 
 @router.put("/requests/{request_id}/reject")
 async def reject_expense_request(
     request_id: int,
+    request: Request,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -107,6 +112,8 @@ async def reject_expense_request(
     req.status = ExpenseRequestStatus.RECHAZADO
     await db.commit()
     await db.refresh(req)
+    ip = request.client.host if request.client else None
+    await create_log_entry(db, current_user.id, "reject", "expense_request", req.id, f"Rejected edit request for expense #{req.expense_id}", ip)
     return {"detail": "Request rejected", "request_id": request_id}
 
 
@@ -138,6 +145,7 @@ async def request_expense_edit(
 async def admin_edit_expense(
     expense_id: int,
     payload: ExpenseEdit,
+    request: Request,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -178,4 +186,6 @@ async def admin_edit_expense(
     expense_stmt = select(Expense).where(Expense.id == expense_id)
     expense_res = await db.execute(expense_stmt)
     expense = expense_res.scalar_one()
+    ip = request.client.host if request.client else None
+    await create_log_entry(db, current_user.id, "edit", "expense", expense_id, f"Edited expense #{expense_id}: ${payload.amount}", ip)
     return ExpenseResponse.from_orm(expense)

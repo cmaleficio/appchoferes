@@ -3,6 +3,7 @@
 from enum import Enum
 from typing import Optional, List
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 class ExpenseCategory(str, Enum):
     peaje = "peaje"
@@ -13,6 +14,8 @@ class ExpenseCategory(str, Enum):
 class ExpenseBase(BaseModel):
     category: ExpenseCategory
     amount: float
+    amount_bs: Optional[float] = None
+    exchange_rate: Optional[float] = None
     description: Optional[str] = None
     is_multiple_tolls: Optional[bool] = None
     toll_count: Optional[int] = None
@@ -26,6 +29,7 @@ class ExpenseEdit(ExpenseBase):
 class ExpenseResponse(ExpenseBase):
     id: int
     user_id: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

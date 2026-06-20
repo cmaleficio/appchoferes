@@ -22,6 +22,11 @@ async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    if db_user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is disabled",
+        )
     access_token_expires = timedelta(minutes=60 * 24)
     access_token = create_access_token(
         data={"sub": str(db_user.id), "role": db_user.role}, expires_delta=access_token_expires

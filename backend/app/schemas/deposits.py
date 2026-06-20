@@ -1,28 +1,24 @@
-"""Pydantic schemas for budgets and expense‑request updates."""
+"""Pydantic schemas for driver deposits."""
 
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
-class BudgetCreate(BaseModel):
+class DepositCreate(BaseModel):
     user_id: int
     amount: float
     amount_bs: Optional[float] = None
     exchange_rate: Optional[float] = None
-    period_start: datetime
-    period_end: datetime
+    description: Optional[str] = None
 
-class BudgetResponse(BaseModel):
+class DepositResponse(BaseModel):
     id: int
     user_id: int
     amount: float
     amount_bs: Optional[float] = None
     exchange_rate: Optional[float] = None
-    period_start: datetime
-    period_end: datetime
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
-
-class ExpenseRequestStatusUpdate(BaseModel):
-    status: str  # expected values: 'pendiente', 'aprobado', 'rechazado'
