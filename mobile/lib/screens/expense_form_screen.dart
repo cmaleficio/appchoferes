@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/local_expense.dart';
+import '../models/local_track.dart';
 import '../services/database_service.dart';
 import '../services/camera_service.dart';
+import '../services/gps_service.dart';
 import '../widgets/expense_category_dropdown.dart';
 import '../widgets/toll_fields.dart';
 
@@ -17,6 +19,7 @@ class ExpenseFormScreen extends StatefulWidget {
 class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _db = DatabaseService.instance;
+  final _gps = GpsService.instance;
 
   String _category = 'gasolina';
   double _amount = 0;
@@ -26,6 +29,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   String? _receiptPath;
   bool? _isMultipleTolls;
   int? _tollCount;
+  GpsLocation? _capturedLocation;
+  bool _gpsCaptured = false;
+  String? _gpsLabel;
 
   bool _saving = false;
   double _estimatedBalance = 0;
@@ -34,6 +40,29 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   void initState() {
     super.initState();
     _loadBalance();
+    _captureGps();
+  }
+
+  Future<void> _captureGps() async {
+    final loc = await _gps.getCurrentLocation();
+    if (loc != null && mounted) {
+      setState(() {
+        _capturedLocation = loc;
+        _gpsCaptured = true;
+        _gpsLabel =
+            '📍 ${loc.latitude.toStringAsFixed(6)}, ${loc.longitude.toStringAsFixed(6)}';
+      });
+      // Also save as a track point for route recording
+      await _db.saveTrack(LocalTrack(
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        batteryLevel: loc.batteryLevel ?? 100,
+      ));
+    } else {
+      if (mounted) {
+        setState(() => _gpsLabel = '📍 GPS no disponible');
+      }
+    }
   }
 
   Future<void> _loadBalance() async {
@@ -159,6 +188,27 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+
+            // GPS indicator
+            if (_gpsLabel != null)
+              Card(
+                color: _gpsCaptured ? Colors.green.shade50 : Colors.orange.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _gpsCaptured ? Icons.gps_fixed : Icons.gps_off,
+                        size: 20,
+                        color: _gpsCaptured ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_gpsLabel!, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                    ],
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
 
             // Category

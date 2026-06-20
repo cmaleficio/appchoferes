@@ -66,20 +66,24 @@ Entregables: Lógica de sincronización diferida en la app móvil, vista en el p
 ```
 mobile/
 ├── pubspec.yaml
+├── android/app/src/main/AndroidManifest.xml  # Permisos: cámara, GPS, internet, storage
 ├── lib/
-│   ├── main.dart                          # Entry point, MaterialApp, HomeScreen
+│   ├── main.dart                              # Splash con auto-login, HomeScreen, rutas
 │   ├── models/
-│   │   ├── local_expense.dart             # Isar model: LocalExpense (categorías, peajes, foto, sync)
-│   │   └── local_track.dart               # Isar model: LocalTrack (GPS + battery)
+│   │   ├── local_expense.dart                 # Isar model: LocalExpense
+│   │   └── local_track.dart                   # Isar model: LocalTrack
 │   ├── screens/
-│   │   └── expense_form_screen.dart       # Formulario dinámico con cámara, balance estimado, peajes
+│   │   ├── login_screen.dart                  # Login con JWT + URL configurable
+│   │   ├── expense_form_screen.dart           # Formulario dinámico + cámara + GPS + balance
+│   │   └── expense_history_screen.dart        # Historial con filtros por categoría
 │   ├── services/
-│   │   ├── database_service.dart          # Isar init, CRUD expenses/tracks, markSynced
-│   │   ├── camera_service.dart            # image_picker: tomar foto comprobante
-│   │   └── sync_service.dart              # HTTP sync con backend (expenses + tracks)
+│   │   ├── database_service.dart              # Isar init, CRUD, markSynced
+│   │   ├── camera_service.dart                # image_picker para foto comprobante
+│   │   ├── gps_service.dart                   # Captura de ubicación (scaffold)
+│   │   └── sync_service.dart                  # HTTP sync con backend
 │   └── widgets/
-│       ├── expense_category_dropdown.dart  # Dropdown: gasolina, peaje, hotel, otros
-│       └── toll_fields.dart               # Switch peajes múltiples + campo cantidad
+│       ├── expense_category_dropdown.dart      # Dropdown categorías
+│       └── toll_fields.dart                   # Switch peajes múltiples + cantidad
 ```
 
 ### Modelos Isar DB
@@ -92,11 +96,14 @@ mobile/
 - ✅ Cámara: botón para tomar foto del comprobante (image_picker), previsualización.
 - ✅ Balance diario estimado: resta gastos del día del presupuesto diario ($167/día aprox).
 - ✅ Sincronización diferida: SyncService sube expenses/tracks no sincronizados al backend.
+- ✅ Login screen con JWT persistente (flutter_secure_storage), splash con auto-login.
+- ✅ Pantalla de historial de gastos con filtros por categoría y total.
+- ✅ Captura automática de GPS al abrir formulario, guarda como track point local.
+- ✅ AndroidManifest.xml con permisos: cámara, GPS (fine/coarse/background), internet, storage.
 
 ### Pendiente (próximos commits)
-- ⬜ Login screen con JWT persistente (flutter_secure_storage).
-- ⬜ Pantalla de historial de gastos con filtros.
 - ⬜ Grabación de audio (Phase 4).
-- ⬜ Captura automática de GPS al abrir formulario (Phase 4).
-- ⬜ Generar archivos .g.dart con build_runner.
-- ⬜ Agregar a la app permisos de cámara y ubicación en AndroidManifest.xml.
+- ⬜ Generar archivos .g.dart con build_runner (`dart run build_runner build`).
+- ⬜ Agregar dependencias geolocator/location en pubspec.yaml y activar GPS real.
+- ⬜ Subir foto del comprobante al backend (multipart upload).
+- ⬜ Sincronización automática en segundo plano (workmanager / background fetch).
