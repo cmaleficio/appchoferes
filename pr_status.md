@@ -42,13 +42,61 @@ Cierre del ciclo de datos: subida en segundo plano y analítica para la toma de 
 Entregables: Lógica de sincronización diferida en la app móvil, vista en el panel administrativo con gráficos de barras/pasteles de los gastos más fuertes por etiqueta y alertas visuales de choferes excedidos o con saldo bajo.
 
 # CODDING
-- Backend scaffold (models, routers, auth, FastAPI) completed for Phase 1
-- Phase 2: Admin Panel completed.
-  - New routers: `users.py` (`GET /api/users`, `GET /api/users/me`), `budgets.py` (`GET /api/budgets`, `POST /api/budgets`), `routes.py` (`GET /api/routes`, `GET /api/routes/{id}/tracks`).
-  - Updated `expenses.py`: added `GET /api/expenses/`, `GET /api/expenses/requests`, `PUT /api/expenses/requests/{id}/approve`, `PUT /api/expenses/requests/{id}/reject`.
-  - Fixed missing `CORSMiddleware` import in `main.py` and registered new routers. Version bumped to `0.2.0`.
-  - Admin UI at `frontend/index.html` (Vue 3 + Tailwind CDN, SPA):
-    - Dashboard: tabla de choferes con saldos, modal para cargar presupuesto, botón de sincronizar rutas.
-    - Auditoría: selector chofer/ruta, tabla de `route_tracks`, gráfico SVG de curva de descarga de batería, resumen de inicio/fin/descarga.
-    - Solicitudes: listado de `expense_requests` pendientes, botones Aprobar/Rechazar, formulario inline de edición del gasto al aprobar (flujo: approve → PUT expense).
-    
+
+## Fase 1 — Backend (Completada ✅)
+- FastAPI scaffold con routers, auth JWT, hashing argon2.
+- Modelos: User, Expense, Route, RouteTrack, Budget, Tag, ExpenseRequest.
+- MySQL via XAMPP, async SQLAlchemy, Pydantic v2.
+
+## Fase 2 — Admin Panel (Completada ✅)
+- Routers: users (GET/POST/DELETE soft), budgets (GET/POST con exchange rate), expenses (GET/PUT/requests), routes, telemetry, logs, exchange_rates (GET/POST/BCV scrape), deposits (GET/POST).
+- Frontend SPA (Vue 3 + Tailwind CDN):
+  - Dashboard: cards resumen, tabla choferes, modal presupuesto + Bs./tasa BCV, modal depósitos, botón sincronizar rutas.
+  - Auditoría: filtros chofer/ruta, mapa Leaflet con polyline, curva SVG batería, tabla de puntos.
+  - Solicitudes: bandeja con aprobar/rechazar + edición inline.
+  - Usuarios: tabla activos/inactivos, crear, desactivar (soft-delete).
+  - Tasas: tarjeta última tasa + botón "Obtener del BCV", tabla histórica.
+  - Bitácora: tabla de logs con usuario, acción, recurso, detalle, IP.
+- Modelos: Log, ExchangeRate (date unique), Deposit.
+- BCV scraper (Python/httpx): extrae tasa del BCV y la guarda en BD.
+
+## Fase 3 — Mobile Base (En progreso 🚧)
+
+### Estructura del proyecto Flutter (`mobile/`)
+```
+mobile/
+├── pubspec.yaml
+├── lib/
+│   ├── main.dart                          # Entry point, MaterialApp, HomeScreen
+│   ├── models/
+│   │   ├── local_expense.dart             # Isar model: LocalExpense (categorías, peajes, foto, sync)
+│   │   └── local_track.dart               # Isar model: LocalTrack (GPS + battery)
+│   ├── screens/
+│   │   └── expense_form_screen.dart       # Formulario dinámico con cámara, balance estimado, peajes
+│   ├── services/
+│   │   ├── database_service.dart          # Isar init, CRUD expenses/tracks, markSynced
+│   │   ├── camera_service.dart            # image_picker: tomar foto comprobante
+│   │   └── sync_service.dart              # HTTP sync con backend (expenses + tracks)
+│   └── widgets/
+│       ├── expense_category_dropdown.dart  # Dropdown: gasolina, peaje, hotel, otros
+│       └── toll_fields.dart               # Switch peajes múltiples + campo cantidad
+```
+
+### Modelos Isar DB
+- **LocalExpense**: id, serverId, category (enum: peaje|hotel|gasolina|otros), amount, amountBs, exchangeRate, description, receiptImagePath, isMultipleTolls, tollCount, createdAt, synced, syncedAt.
+- **LocalTrack**: id, latitude, longitude, batteryLevel, timestamp, synced, syncedAt.
+
+### Funcionalidades implementadas
+- ✅ Guardado offline en Isar DB (sin conexión a internet).
+- ✅ Formulario dinámico: dropdown categorías → si "peaje" → switch + campo cantidad.
+- ✅ Cámara: botón para tomar foto del comprobante (image_picker), previsualización.
+- ✅ Balance diario estimado: resta gastos del día del presupuesto diario ($167/día aprox).
+- ✅ Sincronización diferida: SyncService sube expenses/tracks no sincronizados al backend.
+
+### Pendiente (próximos commits)
+- ⬜ Login screen con JWT persistente (flutter_secure_storage).
+- ⬜ Pantalla de historial de gastos con filtros.
+- ⬜ Grabación de audio (Phase 4).
+- ⬜ Captura automática de GPS al abrir formulario (Phase 4).
+- ⬜ Generar archivos .g.dart con build_runner.
+- ⬜ Agregar a la app permisos de cámara y ubicación en AndroidManifest.xml.
