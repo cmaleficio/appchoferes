@@ -4,3 +4,18 @@ __pycache__/*
 *.pyo
 *.pyd
 *.err
+
+# Environment
+.env
+venv/
+
+# APK
+*.apk
+
+# Docker volumes
+mysql_data/
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db

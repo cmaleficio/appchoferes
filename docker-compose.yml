@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: appchoferes_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: appchoferes
+      MYSQL_USER: chofer
+      MYSQL_PASSWORD: chofer123
+    ports:
+      - "3307:3306"   # map to 3307 on host to avoid conflict with local MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql   # optional: auto-seed on first run
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: appchoferes_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "mysql+aiomysql://chofer:chofer123@db:3306/appchoferes"
+      JWT_SECRET_KEY: "change-me-in-production"
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
+      - ./frontend:/app/frontend   # mount for live frontend changes
+      - ./backend/app:/app/app     # mount for live backend changes (optional, dev mode)
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: appchoferes_pma
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:
+  uploads_data:
