@@ -19,6 +19,14 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
+    <!-- ─── Foreground service (tracking persistente) ──── -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ─── Wake lock para evitar sleep ────────────────── -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
         android:label="AppChoferes"
         android:name="${applicationName}"

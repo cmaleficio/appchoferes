@@ -73,6 +73,8 @@
             <button @click="activeTab='bitacora'" :class="activeTab==='bitacora' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Bitácora</button>
             <button @click="activeTab='tasas'" :class="activeTab==='tasas' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Tasas</button>
             <button @click="activeTab='telemetria'" :class="activeTab==='telemetria' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Telemetría</button>
+            <button @click="activeTab='mapa'" :class="activeTab==='mapa' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Mapa en Vivo</button>
+            <button @click="activeTab='recorridos'" :class="activeTab==='recorridos' ? 'tab-active' : 'tab-inactive'" class="py-3 px-1 text-sm whitespace-nowrap">Recorridos</button>
           </nav>
         </div>
       </div>
@@ -624,6 +626,96 @@
           </div>
         </div>
 
+        <!-- ===== TAB: MAPA EN VIVO ===== -->
+        <div v-if="!loading && activeTab==='mapa'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Mapa en Vivo — Ubicación de Choferes</h2>
+            <div class="flex gap-2">
+              <span class="text-xs text-gray-400 self-center" id="mapLastUpdate"></span>
+              <button @click="fetchLiveMap" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">⟳ Actualizar</button>
+            </div>
+          </div>
+
+          <div v-if="liveLocations.length === 0" class="text-center py-10 text-gray-400 text-sm bg-white rounded-xl shadow p-8">
+            No hay ubicaciones registradas. Los choferes deben usar la app para enviar su ubicación.
+          </div>
+
+          <div v-else class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Map -->
+            <div class="lg:col-span-3 bg-white rounded-xl shadow overflow-hidden" style="height: 600px;">
+              <div id="liveMap" style="height: 100%; width: 100%;"></div>
+            </div>
+            <!-- Driver list sidebar -->
+            <div class="bg-white rounded-xl shadow p-4 overflow-y-auto" style="max-height: 600px;">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Choferes ({{ liveLocations.length }})</h3>
+              <div v-for="d in liveLocations" :key="d.user_id" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 mb-2 cursor-pointer"
+                   @click="focusDriver(d)">
+                <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: driverColor(d.user_id) }"></div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-medium text-gray-800 truncate">{{ d.user_name }}</div>
+                  <div class="text-xs text-gray-400">
+                    Batería: {{ d.battery_level ?? '—' }}% · {{ timeAgo(d.last_seen) }}
+                  </div>
+                </div>
+                <span class="text-xs font-mono text-gray-500">{{ d.latitude.toFixed(4) }}, {{ d.longitude.toFixed(4) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: RECORRIDOS ===== -->
+        <div v-if="!loading && activeTab==='recorridos'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Recorridos por Fecha</h2>
+            <button @click="fetchRouteTracksByDate" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">⟳ Buscar</button>
+          </div>
+
+          <!-- Filters -->
+          <div class="bg-white rounded-xl shadow p-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Chofer</label>
+                <select v-model="recorridoUserId" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <option value="">Seleccionar chofer</option>
+                  <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name || d.email }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
+                <input v-model="recorridoDate" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <button @click="fetchRouteTracksByDate" :disabled="!recorridoUserId || !recorridoDate"
+                  class="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">
+                  Mostrar Recorrido
+                </button>
+              </div>
+            </div>
+            <div v-if="routeTracksByDate" class="mt-2 text-xs text-gray-400">
+              {{ routeTracksByDate.total_points }} puntos · {{ routeTracksByDate.user_name || routeTracksByDate.user_email }}
+            </div>
+          </div>
+
+          <!-- Map + Data -->
+          <div v-if="routeTracksByDate && routeTracksByDate.points.length >= 2" class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="lg:col-span-3 bg-white rounded-xl shadow overflow-hidden" style="height: 500px;">
+              <div id="recorridoMap" style="height: 100%; width: 100%;"></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 overflow-y-auto" style="max-height: 500px;">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Puntos del Recorrido</h3>
+              <div v-for="(p, i) in routeTracksByDate.points" :key="p.id" class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0 text-xs">
+                <span class="text-gray-400 font-mono w-6">#{{ i + 1 }}</span>
+                <span class="text-gray-600 font-mono flex-1">{{ p.latitude.toFixed(4) }}, {{ p.longitude.toFixed(4) }}</span>
+                <span class="text-gray-400">🔋{{ p.battery_level ?? '—' }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="routeTracksByDate && routeTracksByDate.points.length === 0" class="text-center py-10 text-gray-400 text-sm bg-white rounded-xl shadow p-8">
+            No hay puntos de recorrido para este chofer en la fecha seleccionada.
+          </div>
+        </div>
+
         <!-- ===== TAB: SOLICITUDES ===== -->
         <div v-if="!loading && activeTab==='solicitudes'">
           <div class="flex items-center justify-between mb-4">
@@ -868,6 +960,169 @@
           });
         }
 
+        // ─── Recorridos por Fecha ─────────────────────────
+        const recorridoUserId = ref('');
+        const recorridoDate = ref(new Date().toISOString().slice(0, 10));
+        const routeTracksByDate = ref(null);
+        let recorridoMap = null;
+        let recorridoPolyline = null;
+
+        async function fetchRouteTracksByDate() {
+          if (!recorridoUserId.value || !recorridoDate.value) return;
+          try {
+            const data = await api(`/api/telemetry/tracks-by-date?user_id=${recorridoUserId.value}&date=${recorridoDate.value}`);
+            routeTracksByDate.value = data;
+            await nextTick();
+            renderRecorridoMap();
+          } catch (e) { console.error(e); }
+        }
+
+        function renderRecorridoMap() {
+          const el = document.getElementById('recorridoMap');
+          if (!el) return;
+          const pts = routeTracksByDate.value?.points;
+          if (!pts || pts.length < 2) return;
+
+          if (recorridoMap) { recorridoMap.remove(); recorridoMap = null; }
+          recorridoPolyline = null;
+
+          const coords = pts.map(p => [p.latitude, p.longitude]);
+          recorridoMap = L.map('recorridoMap', { zoomControl: true }).setView(coords[0], 14);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+          }).addTo(recorridoMap);
+
+          // Route polyline
+          L.polyline(coords, { color: '#6366f1', weight: 4, opacity: 0.8 }).addTo(recorridoMap);
+
+          // Start marker (green)
+          L.circleMarker(coords[0], { radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 })
+            .addTo(recorridoMap).bindPopup('Inicio · ' + pts[0].recorded_at?.slice(11, 19) || '');
+
+          // End marker (red)
+          L.circleMarker(coords[coords.length - 1], { radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 })
+            .addTo(recorridoMap).bindPopup('Fin · ' + pts[pts.length - 1].recorded_at?.slice(11, 19) || '');
+
+          // Intermediate points
+          for (let i = 1; i < coords.length - 1; i++) {
+            L.circleMarker(coords[i], { radius: 5, color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.5 })
+              .addTo(recorridoMap).bindPopup(`#${i + 1} · ${pts[i].recorded_at?.slice(11, 19) || ''}`);
+          }
+
+          recorridoMap.fitBounds(coords, { padding: [40, 40] });
+        }
+
+        const liveLocations = ref([]);
+        let liveMap = null;
+        let liveMapMarkers = {};
+        let liveMapTimer = null;
+
+        const DRIVER_COLORS = [
+          '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#ec4899',
+          '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#84cc16',
+        ];
+
+        function driverColor(userId) {
+          return DRIVER_COLORS[userId % DRIVER_COLORS.length];
+        }
+
+        function timeAgo(dateStr) {
+          if (!dateStr) return '—';
+          const now = new Date();
+          const d = new Date(dateStr);
+          const diff = Math.floor((now - d) / 1000);
+          if (diff < 60) return 'ahora';
+          if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+          if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
+          return `${Math.floor(diff / 86400)} d`;
+        }
+
+        async function fetchLiveMap() {
+          try {
+            const data = await api('/api/telemetry/latest-locations');
+            liveLocations.value = data;
+            document.getElementById('mapLastUpdate').textContent =
+              'Última actualización: ' + new Date().toLocaleTimeString();
+            await nextTick();
+            renderLiveMap();
+          } catch (e) { console.error(e); }
+        }
+
+        function renderLiveMap() {
+          const el = document.getElementById('liveMap');
+          if (!el) return;
+
+          if (!liveMap) {
+            liveMap = L.map('liveMap', { zoomControl: true }).setView([10.5, -66.9], 8);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors',
+              maxZoom: 19,
+            }).addTo(liveMap);
+          }
+
+          // Remove markers for drivers no longer in data
+          const currentIds = new Set(liveLocations.value.map(d => d.user_id));
+          for (const id in liveMapMarkers) {
+            if (!currentIds.has(Number(id))) {
+              liveMap.removeLayer(liveMapMarkers[id]);
+              delete liveMapMarkers[id];
+            }
+          }
+
+          // Add / update markers
+          const bounds = [];
+          for (const d of liveLocations.value) {
+            const color = driverColor(d.user_id);
+            const icon = L.divIcon({
+              html: `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+              className: '',
+            });
+            const popup = `
+              <div style="font-size:13px;">
+                <b>${d.user_name}</b><br>
+                📧 ${d.user_email}<br>
+                🔋 ${d.battery_level ?? '—'}%<br>
+                🕐 ${timeAgo(d.last_seen)}<br>
+                📍 ${d.latitude.toFixed(6)}, ${d.longitude.toFixed(6)}
+              </div>
+            `;
+
+            if (liveMapMarkers[d.user_id]) {
+              liveMapMarkers[d.user_id].setLatLng([d.latitude, d.longitude]);
+              liveMapMarkers[d.user_id].setPopupContent(popup);
+            } else {
+              const marker = L.marker([d.latitude, d.longitude], { icon })
+                .addTo(liveMap)
+                .bindPopup(popup);
+              liveMapMarkers[d.user_id] = marker;
+            }
+            bounds.push([d.latitude, d.longitude]);
+          }
+
+          if (bounds.length > 0) {
+            liveMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+          }
+        }
+
+        function focusDriver(d) {
+          if (!liveMap || !liveMapMarkers[d.user_id]) return;
+          liveMap.setView([d.latitude, d.longitude], 15);
+          liveMapMarkers[d.user_id].openPopup();
+        }
+
+        function startLiveMapAutoRefresh() {
+          stopLiveMapAutoRefresh();
+          fetchLiveMap();
+          liveMapTimer = setInterval(fetchLiveMap, 10000);
+        }
+
+        function stopLiveMapAutoRefresh() {
+          if (liveMapTimer) { clearInterval(liveMapTimer); liveMapTimer = null; }
+        }
+
         // Chart computed
         const plotW = computed(() => chartW - padL - padR);
         const plotH = computed(() => chartH - padT - padB);
@@ -941,6 +1196,7 @@
             await fetchLogs();
             await fetchExchangeRates();
             await fetchTelemetry();
+            await fetchLiveMap();
           } catch (e) {
             if (e.message.includes('401') || e.message.includes('Unauthorized')) logout();
           } finally { loading.value = false; }
@@ -1242,6 +1498,16 @@
           if (tab === 'telemetria') {
             nextTick(() => renderTelemetryChart());
           }
+          if (tab === 'mapa') {
+            nextTick(() => {
+              startLiveMapAutoRefresh();
+            });
+          } else {
+            stopLiveMapAutoRefresh();
+          }
+          if (tab === 'recorridos' && routeTracksByDate.value) {
+            nextTick(() => renderRecorridoMap());
+          }
         });
 
         // Auto-load on mount if token exists
@@ -1266,6 +1532,8 @@
           fetchExchangeRates, fetchBCVRateForTab, formatDate,
           logs, fetchLogs, userName, actionBadge,
           telemetryData, fetchTelemetry,
+          liveLocations, fetchLiveMap, driverColor, timeAgo, focusDriver,
+          recorridoUserId, recorridoDate, routeTracksByDate, fetchRouteTracksByDate,
         };
       }
     }).mount('#app');

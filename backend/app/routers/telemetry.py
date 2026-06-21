@@ -1,9 +1,10 @@
 """Telemetry router handling batch tracking points."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select as sel
+from sqlalchemy import func, select as sel, and_, cast, Date
 from typing import Optional
+from datetime import date as date_type
 
 from ..core.dependencies import get_current_user
 from ..core.database import get_db
@@ -144,6 +145,94 @@ async def expense_vs_distance(
             "user_name": user.name or user.email,
             "total_expenses_usd": round(total_expenses, 2),
             "total_km": round(total_km, 2),
+        })
+
+    return result
+
+
+@router.get("/tracks-by-date")
+async def tracks_by_date(
+    user_id: int = Query(...),
+    date: str = Query(...),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    try:
+        target_date = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    stmt = (
+        sel(RouteTrack)
+        .where(
+            and_(
+                RouteTrack.user_id == user_id,
+                cast(RouteTrack.recorded_at, Date) == target_date,
+            )
+        )
+        .order_by(RouteTrack.recorded_at)
+    )
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
+
+    user_result = await db.execute(sel(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+
+    return {
+        "user_id": user_id,
+        "user_name": user.name if user else None,
+        "user_email": user.email if user else None,
+        "date": date,
+        "points": [
+            {
+                "id": t.id,
+                "latitude": t.latitude,
+                "longitude": t.longitude,
+                "battery_level": t.battery_level,
+                "recorded_at": str(t.recorded_at) if t.recorded_at else None,
+            }
+            for t in tracks
+        ],
+        "total_points": len(tracks),
+    }
+
+
+@router.get("/latest-locations")
+async def latest_locations(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    # Get all active drivers
+    users_result = await db.execute(sel(User).where(User.role == "driver", User.is_active == True))
+    users = users_result.scalars().all()
+
+    result = []
+    for u in users:
+        track_stmt = (
+            sel(RouteTrack)
+            .where(RouteTrack.user_id == u.id)
+            .order_by(RouteTrack.recorded_at.desc())
+            .limit(1)
+        )
+        track_result = await db.execute(track_stmt)
+        track = track_result.scalar_one_or_none()
+        if track is None:
+            continue
+
+        result.append({
+            "user_id": u.id,
+            "user_name": u.name or u.email,
+            "user_email": u.email,
+            "latitude": track.latitude,
+            "longitude": track.longitude,
+            "battery_level": track.battery_level,
+            "last_seen": str(track.recorded_at) if track.recorded_at else None,
         })
 
     return result
