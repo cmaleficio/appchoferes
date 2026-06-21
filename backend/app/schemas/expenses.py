@@ -20,8 +20,15 @@ class ExpenseBase(BaseModel):
     is_multiple_tolls: Optional[bool] = None
     toll_count: Optional[int] = None
 
-class ExpenseCreate(ExpenseBase):
-    pass
+class ExpenseCreate(BaseModel):
+    category: ExpenseCategory
+    amount_bs: float
+    exchange_rate: float
+    description: Optional[str] = None
+    receipt_image_path: Optional[str] = None
+    audio_path: Optional[str] = None
+    is_multiple_tolls: Optional[bool] = None
+    toll_count: Optional[int] = None
 
 class ExpenseEdit(ExpenseBase):
     pass
@@ -29,6 +36,8 @@ class ExpenseEdit(ExpenseBase):
 class ExpenseResponse(ExpenseBase):
     id: int
     user_id: int
+    receipt_image_path: Optional[str] = None
+    audio_path: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:

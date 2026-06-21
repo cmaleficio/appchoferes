@@ -1,11 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import '../models/local_expense.dart';
 import '../models/local_track.dart';
 import '../services/database_service.dart';
+import '../services/sync_service.dart';
 import '../services/camera_service.dart';
 import '../services/gps_service.dart';
+import '../services/audio_service.dart';
 import '../widgets/expense_category_dropdown.dart';
 import '../widgets/toll_fields.dart';
 
@@ -20,13 +24,15 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _db = DatabaseService.instance;
   final _gps = GpsService.instance;
+  final _audio = AudioService.instance;
 
   String _category = 'gasolina';
-  double _amount = 0;
-  double? _amountBs;
-  double? _exchangeRate;
+  double _amountBs = 0;
+  double _exchangeRate = 0;
   String? _description;
   String? _receiptPath;
+  String? _audioPath;
+  bool _isRecording = false;
   bool? _isMultipleTolls;
   int? _tollCount;
   GpsLocation? _capturedLocation;
@@ -34,13 +40,20 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   String? _gpsLabel;
 
   bool _saving = false;
-  double _estimatedBalance = 0;
+  double _balance = 0;
+  bool _loadingRate = true;
 
   @override
   void initState() {
     super.initState();
-    _loadBalance();
+    _loadRate();
     _captureGps();
+  }
+
+  @override
+  void dispose() {
+    _audio.dispose();
+    super.dispose();
   }
 
   Future<void> _captureGps() async {
@@ -52,7 +65,6 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         _gpsLabel =
             '📍 ${loc.latitude.toStringAsFixed(6)}, ${loc.longitude.toStringAsFixed(6)}';
       });
-      // Also save as a track point for route recording
       await _db.saveTrack(LocalTrack(
         latitude: loc.latitude,
         longitude: loc.longitude,
@@ -66,33 +78,111 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     }
   }
 
-  Future<void> _loadBalance() async {
-    final totalToday = await _db.getTotalExpensesToday();
-    // Estimate: driver gets $5000/month budget, ~$167/day
-    final dailyBudget = 5000.0 / 30;
-    if (mounted) {
-      setState(() => _estimatedBalance = dailyBudget - totalToday);
+  Future<void> _loadRate() async {
+    try {
+      final token = await SyncService.instance.getToken();
+      if (token == null) return;
+      final res = await http.get(
+        Uri.parse(
+            '${SyncService.instance.getBaseUrl()}/api/exchange-rates/current'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _exchangeRate = (data['rate'] as num).toDouble();
+          _loadingRate = false;
+        });
+        await _loadBalance();
+      } else {
+        setState(() => _loadingRate = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingRate = false);
     }
+  }
+
+  Future<void> _loadBalance() async {
+    try {
+      final token = await SyncService.instance.getToken();
+      if (token == null) return;
+      final res = await http.get(
+        Uri.parse(
+            '${SyncService.instance.getBaseUrl()}/api/expenses/my-summary'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final backendBalance = (data['balance'] as num).toDouble();
+        final localUnsynced = await _db.getTotalUnsyncedAmountBs();
+        if (_exchangeRate > 0) {
+          setState(() =>
+              _balance = backendBalance - (localUnsynced / _exchangeRate));
+        } else {
+          setState(() => _balance = backendBalance);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _takePhoto() async {
     final path = await CameraService.instance.takeReceiptPhoto();
-    if (path != null) setState(() => _receiptPath = path);
+    if (path != null && mounted) setState(() => _receiptPath = path);
+  }
+
+  Future<void> _toggleAudio() async {
+    if (_isRecording) {
+      final path = await _audio.stopRecording();
+      if (path != null && mounted) {
+        setState(() {
+          _audioPath = path;
+          _isRecording = false;
+        });
+      }
+    } else {
+      final path = await _audio.startRecording();
+      if (path != null && mounted) {
+        setState(() {
+          _audioPath = path;
+          _isRecording = true;
+        });
+      }
+    }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_receiptPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes tomar la foto del comprobante primero'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_exchangeRate <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay tasa BCV disponible. Contacta al administrador'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
 
     try {
+      final usdAmount = _amountBs / _exchangeRate;
       final expense = LocalExpense(
         category: _category,
-        amount: _amount,
+        amount: usdAmount,
         amountBs: _amountBs,
         exchangeRate: _exchangeRate,
         description: _description,
         receiptImagePath: _receiptPath,
+        audioPath: _audioPath,
         isMultipleTolls: _category == 'peaje' ? _isMultipleTolls : null,
         tollCount: _category == 'peaje' && _isMultipleTolls == true
             ? _tollCount
@@ -125,20 +215,28 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final bsFormat = NumberFormat.currency(symbol: 'Bs. ', decimalDigits: 2);
+
+    final bool canSubmit = _receiptPath != null && _exchangeRate > 0;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Registrar Gasto'),
         actions: [
           TextButton(
-            onPressed: _submit,
+            onPressed: canSubmit ? _submit : null,
             child: _saving
                 ? const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Guardar'),
+                : Text(
+                    'Guardar',
+                    style: TextStyle(
+                      color: canSubmit ? null : Colors.grey,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -149,7 +247,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
           children: [
             // Balance card
             Card(
-              color: _estimatedBalance >= 0
+              color: _balance >= 0
                   ? Colors.green.shade50
                   : Colors.red.shade50,
               child: Padding(
@@ -157,29 +255,29 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      _estimatedBalance >= 0
+                      _balance >= 0
                           ? Icons.account_balance_wallet
                           : Icons.warning_amber,
                       color:
-                          _estimatedBalance >= 0 ? Colors.green : Colors.red,
+                          _balance >= 0 ? Colors.green : Colors.red,
                     ),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Saldo estimado del día',
+                          'Saldo disponible',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
                           ),
                         ),
                         Text(
-                          currencyFormat.format(_estimatedBalance),
+                          currencyFormat.format(_balance),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: _estimatedBalance >= 0
+                            color: _balance >= 0
                                 ? Colors.green.shade700
                                 : Colors.red.shade700,
                           ),
@@ -195,7 +293,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
             // GPS indicator
             if (_gpsLabel != null)
               Card(
-                color: _gpsCaptured ? Colors.green.shade50 : Colors.orange.shade50,
+                color: _gpsCaptured
+                    ? Colors.green.shade50
+                    : Colors.orange.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(
@@ -203,10 +303,14 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                       Icon(
                         _gpsCaptured ? Icons.gps_fixed : Icons.gps_off,
                         size: 20,
-                        color: _gpsCaptured ? Colors.green : Colors.orange,
+                        color:
+                            _gpsCaptured ? Colors.green : Colors.orange,
                       ),
                       const SizedBox(width: 8),
-                      Text(_gpsLabel!, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                      Text(_gpsLabel!,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700)),
                     ],
                   ),
                 ),
@@ -222,17 +326,17 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Amount
+            // Amount in Bs
             TextFormField(
               decoration: const InputDecoration(
-                labelText: 'Monto (\$)',
+                labelText: 'Monto en Bs.',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.attach_money),
+                prefixIcon: Icon(Icons.money),
               ),
               keyboardType: TextInputType.number,
-              onChanged: (v) => _amount = double.tryParse(v) ?? 0,
+              onChanged: (v) => _amountBs = double.tryParse(v) ?? 0,
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Ingresa el monto';
+                if (v == null || v.isEmpty) return 'Ingresa el monto en Bs.';
                 if (double.tryParse(v) == null || double.parse(v) <= 0) {
                   return 'Monto inválido';
                 }
@@ -241,29 +345,46 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Amount Bs (optional)
-            TextFormField(
-              decoration: const InputDecoration(
-                labelText: 'Monto en Bs. (opcional)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.money),
+            // Exchange rate (auto-fetched, read-only)
+            Card(
+              color: Colors.blue.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.trending_up, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _loadingRate
+                          ? const Text('Cargando tasa BCV...',
+                              style: TextStyle(fontSize: 13))
+                          : Text(
+                              'Tasa BCV: Bs. ${_exchangeRate.toStringAsFixed(2)} / USD',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade800),
+                            ),
+                    ),
+                  ],
+                ),
               ),
-              keyboardType: TextInputType.number,
-              onChanged: (v) => _amountBs = double.tryParse(v),
             ),
-            const SizedBox(height: 16),
 
-            // Exchange rate (optional)
-            TextFormField(
-              decoration: const InputDecoration(
-                labelText: 'Tasa BCV (opcional)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.trending_up),
+            // Auto-calculated USD amount
+            if (!_loadingRate && _exchangeRate > 0 && _amountBs > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 16),
+                child: Text(
+                  '≈ ${currencyFormat.format(_amountBs / _exchangeRate)} USD',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
-              keyboardType: TextInputType.number,
-              onChanged: (v) => _exchangeRate = double.tryParse(v),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Toll-specific fields
             if (_category == 'peaje') ...[
@@ -289,16 +410,21 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Receipt photo
+            // Receipt photo (required before submit)
             Card(
               child: InkWell(
                 onTap: _takePhoto,
                 child: Container(
-                  height: 160,
+                  height: 180,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey.shade100,
+                    color: _receiptPath != null
+                        ? Colors.transparent
+                        : Colors.orange.shade50,
+                    border: _receiptPath == null
+                        ? Border.all(color: Colors.orange.shade300, width: 2)
+                        : null,
                   ),
                   child: _receiptPath != null
                       ? Stack(
@@ -325,20 +451,120 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                                 ),
                               ),
                             ),
+                            Positioned(
+                              bottom: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  '✅ Comprobante',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ),
                           ],
                         )
-                      : const Column(
+                      : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.camera_alt,
-                                size: 48, color: Colors.grey),
-                            SizedBox(height: 8),
+                                size: 48, color: Colors.orange.shade700),
+                            const SizedBox(height: 8),
                             Text(
-                              'Tomar foto del comprobante',
-                              style: TextStyle(color: Colors.grey),
+                              'OBLIGATORIO: Tomar foto del comprobante',
+                              style: TextStyle(
+                                color: Colors.orange.shade800,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Toca aquí para abrir la cámara',
+                              style: TextStyle(
+                                  color: Colors.orange.shade600, fontSize: 12),
                             ),
                           ],
                         ),
+                ),
+              ),
+            ),
+            if (_receiptPath == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 12),
+                child: Text(
+                  '* Debes tomar la foto para poder guardar el gasto',
+                  style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Audio description (optional)
+            Card(
+              child: InkWell(
+                onTap: _toggleAudio,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isRecording ? Icons.mic : Icons.mic_none,
+                        color: _isRecording ? Colors.red : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _isRecording
+                                  ? 'Grabando... (toca para detener)'
+                                  : _audioPath != null
+                                      ? '✅ Audio grabado'
+                                      : 'Grabar descripción por voz',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: _isRecording
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _isRecording
+                                    ? Colors.red
+                                    : Colors.grey.shade800,
+                              ),
+                            ),
+                            if (_isRecording)
+                              Text(
+                                'Toca de nuevo para detener',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey.shade500),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (_audioPath != null && !_isRecording)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 20, color: Colors.red),
+                          onPressed: () =>
+                              setState(() => _audioPath = null),
+                        ),
+                      if (_isRecording)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),

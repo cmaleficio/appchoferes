@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:battery_plus/battery_plus.dart';
 
-/// GPS location data.
 class GpsLocation {
   final double latitude;
   final double longitude;
@@ -16,33 +17,64 @@ class GpsLocation {
   }) : timestamp = timestamp ?? DateTime.now();
 }
 
-/// Service for capturing GPS location.
-///
-/// Uses `geolocator` or `location` package in production.
-/// This scaffold provides the interface; wire real GPS in android/app/build.gradle.
 class GpsService {
   static final GpsService _instance = GpsService._();
   static GpsService get instance => _instance;
   GpsService._();
 
-  StreamSubscription? _subscription;
+  final Battery _battery = Battery();
+  StreamSubscription<Position>? _subscription;
   GpsLocation? _lastLocation;
 
-  /// Returns the current location (or a fallback for development).
+  Future<double> _getBattery() async {
+    try {
+      return (await _battery.batteryLevel).toDouble();
+    } catch (_) {
+      return 100;
+    }
+  }
+
   Future<GpsLocation?> getCurrentLocation() async {
-    // In production: replace with Geolocator.getCurrentPosition()
-    // For now, return a mock so the app doesn't crash.
-    debugPrint('[GPS] getCurrentLocation called — wire geolocator package');
-    return null;
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      final battery = await _getBattery();
+      final loc = GpsLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        batteryLevel: battery,
+      );
+      _lastLocation = loc;
+      return loc;
+    } catch (e) {
+      debugPrint('[GPS] getCurrentLocation error: $e');
+      return null;
+    }
   }
 
-  /// Start listening to location updates.
   Future<void> startListening() async {
-    // In production: Geolocator.getPositionStream(...).listen(...)
-    debugPrint('[GPS] startListening called');
+    stopListening();
+    try {
+      _subscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      ).listen((pos) {
+        _lastLocation = GpsLocation(
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+        );
+      });
+    } catch (e) {
+      debugPrint('[GPS] startListening error: $e');
+    }
   }
 
-  /// Stop listening.
   void stopListening() {
     _subscription?.cancel();
     _subscription = null;

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/database_service.dart';
 import 'services/sync_service.dart';
+import 'services/telemetry_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/home_screen.dart' as dash;
 import 'screens/expense_form_screen.dart';
 import 'screens/expense_history_screen.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.instance.init();
+  // Start background telemetry tracking
+  TelemetryService.instance.start();
   runApp(const AppChoferesApp());
 }
 
@@ -33,13 +37,15 @@ class AppChoferesApp extends StatelessWidget {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
           case '/home':
-            return MaterialPageRoute(builder: (_) => const HomeScreen());
+            return MaterialPageRoute(builder: (_) => const dash.HomeScreen());
           case '/expense/new':
             return MaterialPageRoute(builder: (_) => const ExpenseFormScreen());
           case '/expenses':
             return MaterialPageRoute(builder: (_) => const ExpenseHistoryScreen());
           default:
-            return MaterialPageRoute(builder: (_) => const HomeScreen());
+            return MaterialPageRoute(builder: (_) => const dash.HomeScreen());
+
+
         }
       },
     );
@@ -83,83 +89,4 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/// Home screen: driver dashboard with quick actions.
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('AppChoferes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'Sincronizar',
-            onPressed: () async {
-              final sync = SyncService.instance;
-              final token = await sync.getToken();
-              if (token == null) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sincronizando...')),
-              );
-              await sync.fullSync(token);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('✅ Sincronización completada'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              await SyncService.instance.clearToken();
-              if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
-              }
-            },
-          ),
-        ],
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
-            SizedBox(height: 16),
-            Text(
-              'Sesión iniciada',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text('Usa el botón + para registrar un gasto'),
-          ],
-        ),
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'history',
-            onPressed: () => Navigator.pushNamed(context, '/expenses'),
-            tooltip: 'Historial de gastos',
-            child: const Icon(Icons.list_alt),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'new_expense',
-            onPressed: () =>
-                Navigator.pushNamed(context, '/expense/new'),
-            icon: const Icon(Icons.add),
-            label: const Text('Registrar Gasto'),
-          ),
-        ],
-      ),
-    );
-  }
-}

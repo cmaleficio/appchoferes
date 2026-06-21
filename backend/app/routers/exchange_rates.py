@@ -80,6 +80,44 @@ async def get_latest_rate(
     return ExchangeRateResponse.from_orm(rate)
 
 
+@router.get("/exchange-rates/current")
+async def get_current_rate(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import date
+    # Try today's rate first
+    stmt = select(ExchangeRate).where(ExchangeRate.date == date.today()).order_by(desc(ExchangeRate.created_at)).limit(1)
+    result = await db.execute(stmt)
+    rate = result.scalar_one_or_none()
+    if not rate:
+        stmt = select(ExchangeRate).order_by(desc(ExchangeRate.date)).limit(1)
+        result = await db.execute(stmt)
+        rate = result.scalar_one_or_none()
+    if not rate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No exchange rates found")
+    return ExchangeRateResponse.from_orm(rate)
+
+
+@router.get("/exchange-rates/rate")
+async def get_rate_by_date(
+    date_str: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import date
+    try:
+        query_date = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use YYYY-MM-DD")
+    stmt = select(ExchangeRate).where(ExchangeRate.date == query_date)
+    result = await db.execute(stmt)
+    rate = result.scalar_one_or_none()
+    if not rate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No exchange rate found for {date_str}")
+    return ExchangeRateResponse.from_orm(rate)
+
+
 @router.post("/exchange-rates/bcv")
 async def scrape_bcv_rate(
     request: Request,

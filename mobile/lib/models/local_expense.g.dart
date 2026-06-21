@@ -27,53 +27,58 @@ const LocalExpenseSchema = CollectionSchema(
       name: r'amountBs',
       type: IsarType.double,
     ),
-    r'category': PropertySchema(
+    r'audioPath': PropertySchema(
       id: 2,
+      name: r'audioPath',
+      type: IsarType.string,
+    ),
+    r'category': PropertySchema(
+      id: 3,
       name: r'category',
       type: IsarType.string,
     ),
     r'createdAt': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'description': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'description',
       type: IsarType.string,
     ),
     r'exchangeRate': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'exchangeRate',
       type: IsarType.double,
     ),
     r'isMultipleTolls': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'isMultipleTolls',
       type: IsarType.bool,
     ),
     r'receiptImagePath': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'receiptImagePath',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'synced': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'synced',
       type: IsarType.bool,
     ),
     r'syncedAt': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'syncedAt',
       type: IsarType.dateTime,
     ),
     r'tollCount': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'tollCount',
       type: IsarType.long,
     )
@@ -125,6 +130,12 @@ int _localExpenseEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final value = object.audioPath;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.category.length * 3;
   {
     final value = object.description;
@@ -155,16 +166,17 @@ void _localExpenseSerialize(
 ) {
   writer.writeDouble(offsets[0], object.amount);
   writer.writeDouble(offsets[1], object.amountBs);
-  writer.writeString(offsets[2], object.category);
-  writer.writeDateTime(offsets[3], object.createdAt);
-  writer.writeString(offsets[4], object.description);
-  writer.writeDouble(offsets[5], object.exchangeRate);
-  writer.writeBool(offsets[6], object.isMultipleTolls);
-  writer.writeString(offsets[7], object.receiptImagePath);
-  writer.writeString(offsets[8], object.serverId);
-  writer.writeBool(offsets[9], object.synced);
-  writer.writeDateTime(offsets[10], object.syncedAt);
-  writer.writeLong(offsets[11], object.tollCount);
+  writer.writeString(offsets[2], object.audioPath);
+  writer.writeString(offsets[3], object.category);
+  writer.writeDateTime(offsets[4], object.createdAt);
+  writer.writeString(offsets[5], object.description);
+  writer.writeDouble(offsets[6], object.exchangeRate);
+  writer.writeBool(offsets[7], object.isMultipleTolls);
+  writer.writeString(offsets[8], object.receiptImagePath);
+  writer.writeString(offsets[9], object.serverId);
+  writer.writeBool(offsets[10], object.synced);
+  writer.writeDateTime(offsets[11], object.syncedAt);
+  writer.writeLong(offsets[12], object.tollCount);
 }
 
 LocalExpense _localExpenseDeserialize(
@@ -175,17 +187,18 @@ LocalExpense _localExpenseDeserialize(
 ) {
   final object = LocalExpense(
     amount: reader.readDouble(offsets[0]),
-    amountBs: reader.readDoubleOrNull(offsets[1]),
-    category: reader.readString(offsets[2]),
-    createdAt: reader.readDateTime(offsets[3]),
-    description: reader.readStringOrNull(offsets[4]),
-    exchangeRate: reader.readDoubleOrNull(offsets[5]),
-    isMultipleTolls: reader.readBoolOrNull(offsets[6]),
-    receiptImagePath: reader.readStringOrNull(offsets[7]),
-    serverId: reader.readStringOrNull(offsets[8]),
-    synced: reader.readBoolOrNull(offsets[9]) ?? false,
-    syncedAt: reader.readDateTimeOrNull(offsets[10]),
-    tollCount: reader.readLongOrNull(offsets[11]),
+    amountBs: reader.readDouble(offsets[1]),
+    audioPath: reader.readStringOrNull(offsets[2]),
+    category: reader.readString(offsets[3]),
+    createdAt: reader.readDateTime(offsets[4]),
+    description: reader.readStringOrNull(offsets[5]),
+    exchangeRate: reader.readDouble(offsets[6]),
+    isMultipleTolls: reader.readBoolOrNull(offsets[7]),
+    receiptImagePath: reader.readStringOrNull(offsets[8]),
+    serverId: reader.readStringOrNull(offsets[9]),
+    synced: reader.readBoolOrNull(offsets[10]) ?? false,
+    syncedAt: reader.readDateTimeOrNull(offsets[11]),
+    tollCount: reader.readLongOrNull(offsets[12]),
   );
   object.id = id;
   return object;
@@ -201,26 +214,28 @@ P _localExpenseDeserializeProp<P>(
     case 0:
       return (reader.readDouble(offset)) as P;
     case 1:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 5:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 6:
-      return (reader.readBoolOrNull(offset)) as P;
-    case 7:
       return (reader.readStringOrNull(offset)) as P;
+    case 6:
+      return (reader.readDouble(offset)) as P;
+    case 7:
+      return (reader.readBoolOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 11:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 12:
       return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -551,26 +566,8 @@ extension LocalExpenseQueryFilter
   }
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
-      amountBsIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'amountBs',
-      ));
-    });
-  }
-
-  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
-      amountBsIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'amountBs',
-      ));
-    });
-  }
-
-  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       amountBsEqualTo(
-    double? value, {
+    double value, {
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -584,7 +581,7 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       amountBsGreaterThan(
-    double? value, {
+    double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
@@ -600,7 +597,7 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       amountBsLessThan(
-    double? value, {
+    double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
@@ -616,8 +613,8 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       amountBsBetween(
-    double? lower,
-    double? upper, {
+    double lower,
+    double upper, {
     bool includeLower = true,
     bool includeUpper = true,
     double epsilon = Query.epsilon,
@@ -630,6 +627,160 @@ extension LocalExpenseQueryFilter
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'audioPath',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'audioPath',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'audioPath',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'audioPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'audioPath',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'audioPath',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
+      audioPathIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'audioPath',
+        value: '',
       ));
     });
   }
@@ -981,26 +1132,8 @@ extension LocalExpenseQueryFilter
   }
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
-      exchangeRateIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'exchangeRate',
-      ));
-    });
-  }
-
-  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
-      exchangeRateIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'exchangeRate',
-      ));
-    });
-  }
-
-  QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       exchangeRateEqualTo(
-    double? value, {
+    double value, {
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -1014,7 +1147,7 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       exchangeRateGreaterThan(
-    double? value, {
+    double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
@@ -1030,7 +1163,7 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       exchangeRateLessThan(
-    double? value, {
+    double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
@@ -1046,8 +1179,8 @@ extension LocalExpenseQueryFilter
 
   QueryBuilder<LocalExpense, LocalExpense, QAfterFilterCondition>
       exchangeRateBetween(
-    double? lower,
-    double? upper, {
+    double lower,
+    double upper, {
     bool includeLower = true,
     bool includeUpper = true,
     double epsilon = Query.epsilon,
@@ -1644,6 +1777,18 @@ extension LocalExpenseQuerySortBy
     });
   }
 
+  QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> sortByAudioPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'audioPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> sortByAudioPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'audioPath', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> sortByCategory() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'category', Sort.asc);
@@ -1794,6 +1939,18 @@ extension LocalExpenseQuerySortThenBy
   QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> thenByAmountBsDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amountBs', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> thenByAudioPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'audioPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExpense, LocalExpense, QAfterSortBy> thenByAudioPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'audioPath', Sort.desc);
     });
   }
 
@@ -1950,6 +2107,13 @@ extension LocalExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalExpense, LocalExpense, QDistinct> distinctByAudioPath(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'audioPath', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<LocalExpense, LocalExpense, QDistinct> distinctByCategory(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2031,9 +2195,15 @@ extension LocalExpenseQueryProperty
     });
   }
 
-  QueryBuilder<LocalExpense, double?, QQueryOperations> amountBsProperty() {
+  QueryBuilder<LocalExpense, double, QQueryOperations> amountBsProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amountBs');
+    });
+  }
+
+  QueryBuilder<LocalExpense, String?, QQueryOperations> audioPathProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'audioPath');
     });
   }
 
@@ -2055,7 +2225,7 @@ extension LocalExpenseQueryProperty
     });
   }
 
-  QueryBuilder<LocalExpense, double?, QQueryOperations> exchangeRateProperty() {
+  QueryBuilder<LocalExpense, double, QQueryOperations> exchangeRateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'exchangeRate');
     });

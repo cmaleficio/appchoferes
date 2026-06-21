@@ -30,6 +30,17 @@ async def list_deposits(
     return [DepositResponse.from_orm(d) for d in deposits]
 
 
+@router.get("/deposits/my", response_model=list[DepositResponse])
+async def list_my_deposits(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Deposit).where(Deposit.user_id == current_user.id).order_by(desc(Deposit.created_at))
+    result = await db.execute(stmt)
+    deposits = result.scalars().all()
+    return [DepositResponse.from_orm(d) for d in deposits]
+
+
 @router.post("/deposits", response_model=DepositResponse, status_code=status.HTTP_201_CREATED)
 async def create_deposit(
     payload: DepositCreate,

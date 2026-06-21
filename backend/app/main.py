@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .routers import expenses, telemetry, auth, users, budgets, routes, logs, exchange_rates, deposits
+from .routers import expenses, telemetry, auth, users, budgets, routes, logs, exchange_rates, deposits, uploads
 
 app = FastAPI(title="AppChoferes Backend", version="0.2.0")
 
@@ -28,6 +28,7 @@ app.include_router(routes.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(exchange_rates.router, prefix="/api")
 app.include_router(deposits.router, prefix="/api")
+app.include_router(uploads.router, prefix="/api/expenses", tags=["expenses"])
 # Serve the admin UI (frontend folder) at /admin
 app.mount("/admin", StaticFiles(directory="frontend", html=True), name="admin")
 

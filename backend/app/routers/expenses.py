@@ -8,7 +8,8 @@ from typing import Optional
 from ..core.dependencies import get_current_user
 from ..core.database import get_db
 from ..core.logger import create_log_entry
-from ..models import Expense, ExpenseRequest, ExpenseRequestStatus, User
+from ..models import Expense, ExpenseRequest, ExpenseRequestStatus, User, Deposit
+from sqlalchemy import func
 from ..schemas.expenses import (
     ExpenseCreate,
     ExpenseEdit,
@@ -33,6 +34,62 @@ async def list_expenses(
     result = await db.execute(stmt)
     expenses = result.scalars().all()
     return [ExpenseResponse.from_orm(e) for e in expenses]
+
+
+@router.post("/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
+async def create_expense(
+    payload: ExpenseCreate,
+    request: Request,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    amount = payload.amount_bs / payload.exchange_rate
+    expense = Expense(
+        user_id=current_user.id,
+        category=payload.category.value if hasattr(payload.category, 'value') else payload.category,
+        amount=amount,
+        amount_bs=payload.amount_bs,
+        exchange_rate=payload.exchange_rate,
+        description=payload.description,
+        is_multiple_tolls=payload.is_multiple_tolls,
+        toll_count=payload.toll_count,
+    )
+    db.add(expense)
+    await db.commit()
+    await db.refresh(expense)
+    ip = request.client.host if request.client else None
+    await create_log_entry(db, current_user.id, "create", "expense", expense.id,
+        f"Gasto Bs.{payload.amount_bs:.2f} @ tasa {payload.exchange_rate:.2f} = ${amount:.2f} - {payload.category}", ip)
+    return ExpenseResponse.from_orm(expense)
+
+
+@router.get("/my", response_model=list[ExpenseResponse])
+async def list_my_expenses(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Expense).where(Expense.user_id == current_user.id).order_by(Expense.created_at.desc())
+    result = await db.execute(stmt)
+    expenses = result.scalars().all()
+    return [ExpenseResponse.from_orm(e) for e in expenses]
+
+
+@router.get("/my-summary")
+async def my_expense_summary(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    exp_stmt = select(func.coalesce(func.sum(Expense.amount), 0)).where(Expense.user_id == current_user.id)
+    exp_result = await db.execute(exp_stmt)
+    total_expenses = exp_result.scalar()
+    dep_stmt = select(func.coalesce(func.sum(Deposit.amount), 0)).where(Deposit.user_id == current_user.id)
+    dep_result = await db.execute(dep_stmt)
+    total_deposits = dep_result.scalar()
+    return {
+        "total_deposits": total_deposits,
+        "total_expenses": total_expenses,
+        "balance": total_deposits - total_expenses,
+    }
 
 
 @router.get("/requests")

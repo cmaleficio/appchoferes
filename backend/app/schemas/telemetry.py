@@ -11,5 +11,5 @@ class TrackPoint(BaseModel):
 
 class TelemetryBatch(BaseModel):
     user_id: int
-    route_id: int
+    route_id: int | None = None
     points: List[TrackPoint]

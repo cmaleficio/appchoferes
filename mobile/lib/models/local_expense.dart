@@ -10,11 +10,12 @@ class LocalExpense {
   String? serverId;
 
   String category; // peaje | hotel | gasolina | otros
-  double amount;
-  double? amountBs;
-  double? exchangeRate;
+  double amount;    // USD (computed: amountBs / exchangeRate)
+  double amountBs;  // required — primary amount in Bs
+  double exchangeRate; // required — BCV rate for the date
   String? description;
   String? receiptImagePath;
+  String? audioPath;
 
   bool? isMultipleTolls;
   int? tollCount;
@@ -29,10 +30,11 @@ class LocalExpense {
     this.serverId,
     required this.category,
     required this.amount,
-    this.amountBs,
-    this.exchangeRate,
+    required this.amountBs,
+    required this.exchangeRate,
     this.description,
     this.receiptImagePath,
+    this.audioPath,
     this.isMultipleTolls,
     this.tollCount,
     required this.createdAt,

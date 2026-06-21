@@ -35,7 +35,7 @@ class DatabaseService {
   Future<List<LocalExpense>> getAllExpenses() =>
       isar.localExpenses.where().sortByCreatedAtDesc().findAll();
 
-  Future<double> getTotalExpensesToday() async {
+  Future<double> getTotalExpensesTodayBs() async {
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day);
     final end = start.add(const Duration(days: 1));
@@ -45,10 +45,22 @@ class DatabaseService {
         .findAll();
     double total = 0;
     for (final e in expenses) {
-      total += e.amount;
+      total += e.amountBs;
     }
     return total;
   }
+
+  Future<double> getTotalUnsyncedAmountBs() async {
+    final unsynced = await getUnsyncedExpenses();
+    double total = 0;
+    for (final e in unsynced) {
+      total += e.amountBs;
+    }
+    return total;
+  }
+
+  Future<LocalExpense?> getExpenseByServerId(String serverId) =>
+      isar.localExpenses.where().serverIdEqualTo(serverId).findFirst();
 
   Future<void> markSynced(int localId, String serverId) =>
       isar.writeTxn(() async {
@@ -79,5 +91,16 @@ class DatabaseService {
             await isar.localTracks.put(t);
           }
         }
+      });
+
+  /// Delete all synced tracks to free local storage.
+  Future<void> clearSyncedTracks() =>
+      isar.writeTxn(() async {
+        final synced = await isar.localTracks
+            .where()
+            .filter()
+            .syncedEqualTo(true)
+            .findAll();
+        await isar.localTracks.deleteAll(synced.map((t) => t.id).toList());
       });
 }

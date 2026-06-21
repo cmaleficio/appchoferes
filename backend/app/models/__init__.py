@@ -21,6 +21,8 @@ class Expense(Base):
     amount_bs = Column(Float, nullable=True)
     exchange_rate = Column(Float, nullable=True)
     description = Column(String(500), nullable=True)
+    receipt_image_path = Column(String(500), nullable=True)
+    audio_path = Column(String(500), nullable=True)
     is_multiple_tolls = Column(Boolean, nullable=True)
     toll_count = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,7 +35,7 @@ class RouteTrack(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    route_id = Column(Integer, ForeignKey("routes.id"), nullable=False)
+    route_id = Column(Integer, ForeignKey("routes.id"), nullable=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     battery_level = Column(Float, nullable=False)

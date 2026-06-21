@@ -56,6 +56,18 @@ class _LoginScreenState extends State<LoginScreen> {
         await sync.setBaseUrl(baseUrl);
         await sync.saveToken(token);
 
+        // Fetch user info
+        try {
+          final userRes = await http.get(
+            Uri.parse('$baseUrl/api/users/me'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (userRes.statusCode == 200) {
+            final userData = jsonDecode(userRes.body);
+            await _storage.write(key: 'user_name', value: userData['name'] ?? userData['email'] ?? 'Chofer');
+          }
+        } catch (_) {}
+
         if (mounted) Navigator.pushReplacementNamed(context, '/home');
       } else {
         final detail = jsonDecode(res.body)['detail'] ?? 'Error desconocido';
