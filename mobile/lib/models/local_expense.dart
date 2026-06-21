@@ -35,8 +35,8 @@ class LocalExpense {
     this.receiptImagePath,
     this.isMultipleTolls,
     this.tollCount,
-    DateTime? createdAt,
+    required this.createdAt,
     this.synced = false,
     this.syncedAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  });
 }

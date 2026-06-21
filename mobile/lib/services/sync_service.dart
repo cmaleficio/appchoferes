@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import '../models/local_expense.dart';
-import '../models/local_track.dart';
 import 'database_service.dart';
 
 class SyncService {

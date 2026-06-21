@@ -30,7 +30,7 @@ class DatabaseService {
       isar.writeTxn(() => isar.localExpenses.put(expense));
 
   Future<List<LocalExpense>> getUnsyncedExpenses() =>
-      isar.localExpenses.where().syncedEqualTo(false).findAll();
+      isar.localExpenses.where().filter().syncedEqualTo(false).findAll();
 
   Future<List<LocalExpense>> getAllExpenses() =>
       isar.localExpenses.where().sortByCreatedAtDesc().findAll();
@@ -43,7 +43,11 @@ class DatabaseService {
         .where()
         .createdAtBetween(start, end)
         .findAll();
-    return expenses.fold(0.0, (sum, e) => sum + e.amount);
+    double total = 0;
+    for (final e in expenses) {
+      total += e.amount;
+    }
+    return total;
   }
 
   Future<void> markSynced(int localId, String serverId) =>
@@ -63,7 +67,7 @@ class DatabaseService {
       isar.writeTxn(() => isar.localTracks.put(track));
 
   Future<List<LocalTrack>> getUnsyncedTracks() =>
-      isar.localTracks.where().syncedEqualTo(false).findAll();
+      isar.localTracks.where().filter().syncedEqualTo(false).findAll();
 
   Future<void> markTracksSynced(List<int> ids) =>
       isar.writeTxn(() async {

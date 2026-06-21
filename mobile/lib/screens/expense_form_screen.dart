@@ -57,6 +57,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         latitude: loc.latitude,
         longitude: loc.longitude,
         batteryLevel: loc.batteryLevel ?? 100,
+        timestamp: DateTime.now(),
       ));
     } else {
       if (mounted) {
@@ -96,6 +97,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         tollCount: _category == 'peaje' && _isMultipleTolls == true
             ? _tollCount
             : null,
+        createdAt: DateTime.now(),
       );
 
       await _db.saveExpense(expense);

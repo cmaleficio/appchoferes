@@ -20,8 +20,8 @@ class LocalTrack {
     required this.latitude,
     required this.longitude,
     required this.batteryLevel,
-    DateTime? timestamp,
+    required this.timestamp,
     this.synced = false,
     this.syncedAt,
-  }) : timestamp = timestamp ?? DateTime.now();
+  });
 }
