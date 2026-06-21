@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
     .fade-enter-from, .fade-leave-to { opacity: 0; }
@@ -139,6 +142,7 @@
                       <button @click="openDepositModal(d)" class="inline-flex items-center px-2.5 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md text-xs font-medium transition-colors">Agregar Depósito</button>
                       <button @click="openBudgetModal(d)" class="inline-flex items-center px-2.5 py-1.5 border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md text-xs font-medium transition-colors">Cargar Presupuesto</button>
                       <button @click="syncDriverRoutes(d)" class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 rounded-md text-xs font-medium transition-colors">Sincronizar Rutas</button>
+                      <button @click="openReportModal(d)" class="inline-flex items-center px-2.5 py-1.5 border border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-md text-xs font-medium transition-colors">Reportes</button>
                     </td>
                   </tr>
                   <!-- Driver expense detail (collapsible) -->
@@ -252,16 +256,16 @@
               <div class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Monto en USD ($)</label>
-                  <input v-model.number="depositForm.amount" type="number" step="0.01" min="0" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0.00" />
+                  <input :value="depositForm.amount" @input="onDepositAmountUsdChange($event)" type="number" step="0.01" min="0" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0.00" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Monto en Bs.</label>
-                    <input v-model.number="depositForm.amount_bs" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                    <input :value="depositForm.amount_bs" @input="onDepositAmountBsChange($event)" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Automático" />
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Tasa BCV</label>
-                    <input v-model.number="depositForm.exchange_rate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Opcional" />
+                    <input :value="depositForm.exchange_rate" type="number" step="0.01" min="0" readonly class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 outline-none cursor-not-allowed" :placeholder="depositCurrentRate ? depositCurrentRate.toFixed(2) : 'Cargando...'" />
                   </div>
                 </div>
                 <div>
@@ -274,6 +278,120 @@
                 <button @click="submitDeposit" :disabled="savingDeposit" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50">{{ savingDeposit ? 'Guardando...' : 'Guardar Depósito' }}</button>
               </div>
               <div v-if="depositError" class="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ depositError }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== MODAL: REPORTES ===== -->
+        <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showReportModal=false">
+          <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-gray-800">Reportes — {{ reportDriver?.name || reportDriver?.email }}</h3>
+                <button @click="showReportModal=false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              </div>
+
+              <!-- Date range -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1">Desde</label>
+                  <input v-model="reportDateFrom" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
+                  <input v-model="reportDateTo" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                </div>
+              </div>
+
+              <button @click="fetchReportData" :disabled="!reportDateFrom || !reportDateTo || fetchingReport"
+                class="w-full mb-6 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">
+                {{ fetchingReport ? 'Cargando...' : 'Generar Reporte' }}
+              </button>
+
+              <!-- Results -->
+              <div v-if="reportData" class="space-y-6">
+                <!-- Summary cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div class="bg-indigo-50 rounded-lg p-3 text-center">
+                    <div class="text-xs text-gray-500">Gastos USD</div>
+                    <div class="text-lg font-bold text-indigo-700">\${{ reportData.summary.total_expenses_usd.toFixed(2) }}</div>
+                  </div>
+                  <div class="bg-green-50 rounded-lg p-3 text-center">
+                    <div class="text-xs text-gray-500">Depósitos USD</div>
+                    <div class="text-lg font-bold text-green-700">\${{ reportData.summary.total_deposits_usd.toFixed(2) }}</div>
+                  </div>
+                  <div class="bg-orange-50 rounded-lg p-3 text-center">
+                    <div class="text-xs text-gray-500">Gastos Bs.</div>
+                    <div class="text-lg font-bold text-orange-700">Bs. {{ reportData.summary.total_expenses_bs.toFixed(2) }}</div>
+                  </div>
+                  <div class="bg-emerald-50 rounded-lg p-3 text-center">
+                    <div class="text-xs text-gray-500">Depósitos Bs.</div>
+                    <div class="text-lg font-bold text-emerald-700">Bs. {{ reportData.summary.total_deposits_bs.toFixed(2) }}</div>
+                  </div>
+                </div>
+
+                <!-- Expense table -->
+                <div v-if="reportData.expenses.length > 0">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-2">Gastos ({{ reportData.expenses.length }})</h4>
+                  <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="min-w-full text-xs">
+                      <thead class="bg-gray-50">
+                        <tr>
+                          <th class="px-3 py-2 text-left font-medium text-gray-500">Fecha</th>
+                          <th class="px-3 py-2 text-left font-medium text-gray-500">Categoría</th>
+                          <th class="px-3 py-2 text-right font-medium text-gray-500">Bs.</th>
+                          <th class="px-3 py-2 text-right font-medium text-gray-500">USD</th>
+                          <th class="px-3 py-2 text-left font-medium text-gray-500">Descripción</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <tr v-for="e in reportData.expenses" :key="e.id" class="hover:bg-gray-50">
+                          <td class="px-3 py-1.5 text-gray-500 whitespace-nowrap">{{ e.created_at?.slice(0, 10) }}</td>
+                          <td class="px-3 py-1.5 text-gray-700">{{ e.category }}</td>
+                          <td class="px-3 py-1.5 text-right font-mono">{{ e.amount_bs?.toFixed(2) || '—' }}</td>
+                          <td class="px-3 py-1.5 text-right font-mono">\${{ e.amount.toFixed(2) }}</td>
+                          <td class="px-3 py-1.5 text-gray-500 max-w-[200px] truncate">{{ e.description || '—' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Deposit table -->
+                <div v-if="reportData.deposits.length > 0">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-2">Depósitos ({{ reportData.deposits.length }})</h4>
+                  <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="min-w-full text-xs">
+                      <thead class="bg-gray-50">
+                        <tr>
+                          <th class="px-3 py-2 text-left font-medium text-gray-500">Fecha</th>
+                          <th class="px-3 py-2 text-right font-medium text-gray-500">Bs.</th>
+                          <th class="px-3 py-2 text-right font-medium text-gray-500">USD</th>
+                          <th class="px-3 py-2 text-left font-medium text-gray-500">Descripción</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <tr v-for="d in reportData.deposits" :key="d.id" class="hover:bg-gray-50">
+                          <td class="px-3 py-1.5 text-gray-500 whitespace-nowrap">{{ d.created_at?.slice(0, 10) }}</td>
+                          <td class="px-3 py-1.5 text-right font-mono">{{ d.amount_bs?.toFixed(2) || '—' }}</td>
+                          <td class="px-3 py-1.5 text-right font-mono">\${{ d.amount.toFixed(2) }}</td>
+                          <td class="px-3 py-1.5 text-gray-500 max-w-[200px] truncate">{{ d.description || '—' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Export buttons -->
+                <div class="flex gap-3 pt-2">
+                  <button @click="exportPDF" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+                    📄 Exportar PDF
+                  </button>
+                  <button @click="exportExcel" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg transition-colors">
+                    📊 Exportar Excel
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -825,8 +943,160 @@
         const showDepositModal = ref(false);
         const depositDriver = ref(null);
         const depositForm = ref({ amount: 0, amount_bs: null, exchange_rate: null, description: '' });
+    const depositCurrentRate = ref(null);
+    let depositUpdating = false; // prevents circular recalc
         const depositError = ref('');
         const savingDeposit = ref(false);
+
+        // Reports
+        const showReportModal = ref(false);
+        const reportDriver = ref(null);
+        const reportDateFrom = ref('');
+        const reportDateTo = ref('');
+        const reportData = ref(null);
+        const fetchingReport = ref(false);
+
+        function openReportModal(d) {
+          reportDriver.value = d;
+          reportDateFrom.value = new Date(new Date().setDate(1)).toISOString().slice(0, 10); // 1st of month
+          reportDateTo.value = new Date().toISOString().slice(0, 10);
+          reportData.value = null;
+          showReportModal.value = true;
+        }
+
+        async function fetchReportData() {
+          if (!reportDriver.value || !reportDateFrom.value || !reportDateTo.value) return;
+          fetchingReport.value = true;
+          try {
+            const data = await api(`/api/report?user_id=${reportDriver.value.id}&date_from=${reportDateFrom.value}&date_to=${reportDateTo.value}`);
+            reportData.value = data;
+          } catch (e) { alert('Error al generar reporte: ' + e.message); }
+          finally { fetchingReport.value = false; }
+        }
+
+        function exportPDF() {
+          if (!reportData.value) return;
+          const JSPDF = window.jspdf?.jsPDF;
+          if (!JSPDF) { alert('La librería PDF no se ha cargado. Verifica tu conexión a internet.'); return; }
+          const doc = new JSPDF();
+          const d = reportData.value;
+          const fmt = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2 });
+
+          doc.setFontSize(16);
+          doc.text('AppChoferes — Reporte', 14, 20);
+          doc.setFontSize(10);
+          doc.text(`Chofer: ${d.user_name} (${d.user_email})`, 14, 28);
+          doc.text(`Periodo: ${d.date_from} a ${d.date_to}`, 14, 34);
+
+          // Summary
+          doc.setFontSize(12);
+          doc.text('Resumen', 14, 44);
+          doc.setFontSize(10);
+          doc.text(`Gastos USD: $${fmt.format(d.summary.total_expenses_usd)}`, 14, 52);
+          doc.text(`Gastos Bs.: Bs. ${fmt.format(d.summary.total_expenses_bs)}`, 14, 58);
+          doc.text(`Depositos USD: $${fmt.format(d.summary.total_deposits_usd)}`, 80, 52);
+          doc.text(`Depositos Bs.: Bs. ${fmt.format(d.summary.total_deposits_bs)}`, 80, 58);
+
+          let y = 68;
+
+          // Expenses table
+          if (d.expenses.length > 0) {
+            doc.setFontSize(12);
+            doc.text('Gastos', 14, y);
+            y += 6;
+            doc.autoTable({
+              startY: y,
+              head: [['Fecha', 'Categoria', 'Bs.', 'USD', 'Descripcion']],
+              body: d.expenses.map(e => [
+                (e.created_at || '').slice(0, 10),
+                e.category,
+                e.amount_bs ? fmt.format(e.amount_bs) : '—',
+                fmt.format(e.amount),
+                e.description || '—',
+              ]),
+              styles: { fontSize: 8 },
+              headStyles: { fillColor: [99, 102, 241] },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+          }
+
+          // Deposits table
+          if (d.deposits.length > 0) {
+            if (y > 240) { doc.addPage(); y = 20; }
+            doc.setFontSize(12);
+            doc.text('Depositos', 14, y);
+            y += 6;
+            doc.autoTable({
+              startY: y,
+              head: [['Fecha', 'Bs.', 'USD', 'Descripcion']],
+              body: d.deposits.map(dep => [
+                (dep.created_at || '').slice(0, 10),
+                dep.amount_bs ? fmt.format(dep.amount_bs) : '—',
+                fmt.format(dep.amount),
+                dep.description || '—',
+              ]),
+              styles: { fontSize: 8 },
+              headStyles: { fillColor: [16, 185, 129] },
+            });
+          }
+
+          doc.save(`reporte_${d.user_name}_${d.date_from}_${d.date_to}.pdf`);
+        }
+
+        function exportExcel() {
+          if (!reportData.value) return;
+          const d = reportData.value;
+          const wb = XLSX.utils.book_new();
+
+          // Summary sheet
+          const summaryData = [
+            ['AppChoferes — Reporte'],
+            ['Chofer', d.user_name],
+            ['Email', d.user_email],
+            ['Periodo', `${d.date_from} a ${d.date_to}`],
+            [],
+            ['Resumen'],
+            ['Concepto', 'USD', 'Bs.'],
+            ['Total Gastos', d.summary.total_expenses_usd, d.summary.total_expenses_bs],
+            ['Total Depositos', d.summary.total_deposits_usd, d.summary.total_deposits_bs],
+            ['Balance', d.summary.total_deposits_usd - d.summary.total_expenses_usd, d.summary.total_deposits_bs - d.summary.total_expenses_bs],
+          ];
+          const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+          XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
+
+          // Expenses sheet
+          if (d.expenses.length > 0) {
+            const expData = [
+              ['Fecha', 'Categoria', 'Bs.', 'USD', 'Descripcion'],
+              ...d.expenses.map(e => [
+                (e.created_at || '').slice(0, 10),
+                e.category,
+                e.amount_bs || 0,
+                e.amount,
+                e.description || '',
+              ]),
+            ];
+            const ws2 = XLSX.utils.aoa_to_sheet(expData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Gastos');
+          }
+
+          // Deposits sheet
+          if (d.deposits.length > 0) {
+            const depData = [
+              ['Fecha', 'Bs.', 'USD', 'Descripcion'],
+              ...d.deposits.map(dep => [
+                (dep.created_at || '').slice(0, 10),
+                dep.amount_bs || 0,
+                dep.amount,
+                dep.description || '',
+              ]),
+            ];
+            const ws3 = XLSX.utils.aoa_to_sheet(depData);
+            XLSX.utils.book_append_sheet(wb, ws3, 'Depositos');
+          }
+
+          XLSX.writeFile(wb, `reporte_${d.user_name}_${d.date_from}_${d.date_to}.xlsx`);
+        }
 
         // Driver expense detail
         const selectedDriverId = ref(null);
@@ -1042,8 +1312,8 @@
           try {
             const data = await api('/api/telemetry/latest-locations');
             liveLocations.value = data;
-            document.getElementById('mapLastUpdate').textContent =
-              'Última actualización: ' + new Date().toLocaleTimeString();
+            const el = document.getElementById('mapLastUpdate');
+            if (el) el.textContent = 'Última actualización: ' + new Date().toLocaleTimeString();
             await nextTick();
             renderLiveMap();
           } catch (e) { console.error(e); }
@@ -1248,7 +1518,40 @@
           depositDriver.value = driver;
           depositForm.value = { amount: 0, amount_bs: null, exchange_rate: null, description: '' };
           depositError.value = '';
+          depositCurrentRate.value = null;
           showDepositModal.value = true;
+          api('/api/exchange-rates/current').then(data => {
+            if (data && data.rate) {
+              depositCurrentRate.value = data.rate;
+              depositForm.value.exchange_rate = data.rate;
+            }
+          }).catch(() => {});
+        }
+
+        function onDepositAmountUsdChange(e) {
+          if (depositUpdating) return;
+          const val = parseFloat(e.target.value) || 0;
+          depositForm.value.amount = val;
+          if (val > 0 && depositCurrentRate.value) {
+            depositUpdating = true;
+            depositForm.value.amount_bs = parseFloat((val * depositCurrentRate.value).toFixed(2));
+            depositUpdating = false;
+          } else if (val === 0) {
+            depositForm.value.amount_bs = null;
+          }
+        }
+
+        function onDepositAmountBsChange(e) {
+          if (depositUpdating) return;
+          const val = parseFloat(e.target.value) || 0;
+          depositForm.value.amount_bs = val;
+          if (val > 0 && depositCurrentRate.value) {
+            depositUpdating = true;
+            depositForm.value.amount = parseFloat((val / depositCurrentRate.value).toFixed(2));
+            depositUpdating = false;
+          } else if (val === 0) {
+            depositForm.value.amount = 0;
+          }
         }
 
         async function submitDeposit() {
@@ -1258,10 +1561,10 @@
             const body = {
               user_id: depositDriver.value.id,
               amount: depositForm.value.amount,
+              amount_bs: depositForm.value.amount_bs,
+              exchange_rate: depositForm.value.exchange_rate || depositCurrentRate.value,
               description: depositForm.value.description || null,
             };
-            if (depositForm.value.amount_bs != null) body.amount_bs = depositForm.value.amount_bs;
-            if (depositForm.value.exchange_rate != null) body.exchange_rate = depositForm.value.exchange_rate;
             await api('/api/deposits', { method: 'POST', body: JSON.stringify(body) });
             showDepositModal.value = false;
             await refreshDashboard();
@@ -1518,8 +1821,10 @@
           users, expenses, budgets, deposits, drivers, totalBudget, totalExpensesAll, totalDepositsAll,
           showBudgetModal, budgetDriver, budgetForm, saving, budgetError,
           openBudgetModal, submitBudget, refreshDashboard, syncDriverRoutes,
-          showDepositModal, depositDriver, depositForm, depositError, savingDeposit,
-          openDepositModal, submitDeposit,
+          showDepositModal, depositDriver, depositForm, depositCurrentRate, depositError, savingDeposit,
+          showReportModal, reportDriver, reportDateFrom, reportDateTo, reportData, fetchingReport,
+          openReportModal, fetchReportData, exportPDF, exportExcel,
+          openDepositModal, onDepositAmountUsdChange, onDepositAmountBsChange, submitDeposit,
           selectedDriverId, driverExpenses, toggleDriverExpenses, formatDateShort,
           routes, auditUserId, auditRouteId, routeTracks, fetchRouteTracks, batteryColor,
           requests, editRequestId, editForm, editError,

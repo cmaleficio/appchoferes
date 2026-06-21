@@ -1,5 +1,6 @@
 """Deposit management endpoints for admin."""
 
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -8,7 +9,7 @@ from typing import Optional
 from ..core.dependencies import get_current_user
 from ..core.database import get_db
 from ..core.logger import create_log_entry
-from ..models import Deposit, User
+from ..models import Deposit, ExchangeRate, User
 from ..schemas.deposits import DepositCreate, DepositResponse
 
 router = APIRouter()
@@ -62,12 +63,38 @@ async def create_deposit(
         exchange_rate=payload.exchange_rate,
         description=payload.description,
     )
+    # Auto-calculate missing values using today's exchange rate
+    today = date.today()
+    if deposit.amount > 0:
+        if deposit.amount_bs is None and deposit.exchange_rate is not None:
+            deposit.amount_bs = round(deposit.amount * deposit.exchange_rate, 2)
+        elif deposit.amount_bs is not None and deposit.exchange_rate is None:
+            deposit.exchange_rate = round(deposit.amount_bs / deposit.amount, 2)
+        elif deposit.amount_bs is None and deposit.exchange_rate is None:
+            rate_result = await db.execute(
+                select(ExchangeRate).where(ExchangeRate.date == today).order_by(desc(ExchangeRate.created_at))
+            )
+            rate_row = rate_result.scalar_one_or_none()
+            if rate_row:
+                deposit.exchange_rate = rate_row.rate
+                deposit.amount_bs = round(deposit.amount * rate_row.rate, 2)
+    elif deposit.amount_bs and deposit.amount_bs > 0:
+        if deposit.exchange_rate is not None:
+            deposit.amount = round(deposit.amount_bs / deposit.exchange_rate, 2)
+        else:
+            rate_result = await db.execute(
+                select(ExchangeRate).where(ExchangeRate.date == today).order_by(desc(ExchangeRate.created_at))
+            )
+            rate_row = rate_result.scalar_one_or_none()
+            if rate_row:
+                deposit.exchange_rate = rate_row.rate
+                deposit.amount = round(deposit.amount_bs / rate_row.rate, 2)
     db.add(deposit)
     await db.commit()
     await db.refresh(deposit)
     ip = request.client.host if request.client else None
-    details = f"Deposit ${payload.amount:.2f} USD to user {user.email}"
-    if payload.amount_bs and payload.exchange_rate:
-        details += f" | Bs.{payload.amount_bs:.2f} @ tasa {payload.exchange_rate:.2f}"
+    details = f"Deposit ${deposit.amount:.2f} USD to user {user.email}"
+    if deposit.amount_bs and deposit.exchange_rate:
+        details += f" | Bs.{deposit.amount_bs:.2f} @ tasa {deposit.exchange_rate:.2f}"
     await create_log_entry(db, current_user.id, "create", "deposit", deposit.id, details, ip)
     return DepositResponse.from_orm(deposit)
